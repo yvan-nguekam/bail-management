@@ -1,0 +1,57 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+// GET /api/users - Liste des utilisateurs (pour sélection de locataires)
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: "Non authentifié" },
+        { status: 401 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const role = searchParams.get("role");
+
+    // Seuls les ADMIN, LANDLORD et MANAGER peuvent lister les utilisateurs
+    if (!["ADMIN", "LANDLORD", "MANAGER"].includes(session.user.role)) {
+      return NextResponse.json(
+        { error: "Non autorisé" },
+        { status: 403 }
+      );
+    }
+
+    const where: any = {};
+
+    if (role) {
+      where.role = role;
+    }
+
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+      },
+      orderBy: {
+        name: "asc",
+      },
+    });
+
+    return NextResponse.json(users);
+  } catch (error) {
+    console.error("Erreur lors de la récupération des utilisateurs:", error);
+    return NextResponse.json(
+      { error: "Erreur serveur" },
+      { status: 500 }
+    );
+  }
+}
