@@ -21,7 +21,9 @@ export async function GET(request: NextRequest) {
 
     if (session.user.role === "LANDLORD" || session.user.role === "MANAGER") {
       where.lease = {
-        property: { ownerId: session.user.id }
+        property: {
+          OR: [{ ownerId: session.user.id }, { managerId: session.user.id }]
+        }
       }
     } else if (session.user.role === "TENANT") {
       where.lease = {

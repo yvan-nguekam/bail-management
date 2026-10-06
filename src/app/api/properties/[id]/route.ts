@@ -28,9 +28,10 @@ const updatePropertySchema = z.object({
 // GET /api/properties/[id] - Récupère une propriété par ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -41,7 +42,7 @@ export async function GET(
     }
 
     const property = await prisma.property.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         owner: {
           select: {
@@ -121,9 +122,10 @@ export async function GET(
 // PUT /api/properties/[id] - Met à jour une propriété
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -135,7 +137,7 @@ export async function PUT(
 
     // Vérifier que la propriété existe
     const existingProperty = await prisma.property.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!existingProperty) {
@@ -168,7 +170,7 @@ export async function PUT(
     }
 
     const property = await prisma.property.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData,
       include: {
         owner: {
@@ -203,7 +205,7 @@ export async function PUT(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Données invalides", details: error.errors },
+        { error: "Données invalides", details: error.issues },
         { status: 400 }
       );
     }
@@ -219,9 +221,10 @@ export async function PUT(
 // DELETE /api/properties/[id] - Supprime une propriété
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -233,7 +236,7 @@ export async function DELETE(
 
     // Vérifier que la propriété existe
     const existingProperty = await prisma.property.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         leases: {
           where: {
@@ -274,7 +277,7 @@ export async function DELETE(
     }
 
     await prisma.property.delete({
-      where: { id: params.id },
+      where: { id },
     });
 
     // Créer une entrée d'activité
@@ -283,7 +286,7 @@ export async function DELETE(
         userId: session.user.id,
         action: "DELETE_PROPERTY",
         entityType: "PROPERTY",
-        entityId: params.id,
+        entityId: id,
         details: `Propriété supprimée: ${existingProperty.name}`,
       },
     });

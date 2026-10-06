@@ -17,6 +17,22 @@ enum UserRole {
   TENANT
 }
 
+enum PropertyType {
+  APARTMENT
+  HOUSE
+  STUDIO
+  COMMERCIAL
+  OFFICE
+  OTHER
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  UNAVAILABLE
+}
+
 enum LeaseStatus {
   DRAFT
   ACTIVE
@@ -58,7 +74,12 @@ enum MaintenancePriority {
 enum NotificationType {
   PAYMENT_REMINDER
   PAYMENT_RECEIVED
+  PAYMENT_DUE
+  LEASE_CREATED
+  LEASE_RENEWED
+  LEASE_TERMINATED
   LEASE_EXPIRING
+  MAINTENANCE_REQUEST
   MAINTENANCE_UPDATE
   MESSAGE
   SYSTEM
@@ -77,231 +98,244 @@ model User {
   updatedAt     DateTime  @updatedAt
 
   // Relations
-  ownedProperties Property[]     @relation("PropertyOwner")
-  managedProperties Property[]   @relation("PropertyManager")
-  leases          Lease[]        @relation("TenantLeases")
-  payments        Payment[]
-  maintenanceRequests MaintenanceRequest[] @relation("TenantMaintenance")
+  ownedProperties             Property[]           @relation("PropertyOwner")
+  managedProperties           Property[]           @relation("PropertyManager")
+  leases                      Lease[]              @relation("TenantLeases")
+  payments                    Payment[]
+  maintenanceRequests         MaintenanceRequest[] @relation("TenantMaintenance")
   assignedMaintenanceRequests MaintenanceRequest[] @relation("AssignedMaintenance")
-  sentMessages    Message[]      @relation("SentMessages")
-  receivedMessages Message[]     @relation("ReceivedMessages")
-  notifications   Notification[]
-  documents       Document[]
-  activities      Activity[]
+  maintenanceComments         MaintenanceComment[] @relation("MaintenanceCommentAuthor")
+  sentMessages                Message[]            @relation("SentMessages")
+  receivedMessages            Message[]            @relation("ReceivedMessages")
+  notifications               Notification[]
+  documents                   Document[]
+  activities                  Activity[]
 
   @@map("users")
 }
 
 model Property {
-  id          String   @id @default(cuid())
+  id          String         @id @default(cuid())
   name        String
   address     String
   city        String
-  state       String
-  zipCode     String
-  country     String   @default("France")
-  type        String   // Apartment, House, Commercial, etc.
+  state       String?
+  postalCode  String
+  country     String         @default("France")
+  type        PropertyType   @default(APARTMENT)
+  status      PropertyStatus @default(AVAILABLE)
   bedrooms    Int?
   bathrooms   Int?
-  area        Float?   // in square meters
-  description String?  @db.Text
-  images      String[] // Array of image URLs
-  amenities   String[] // Array of amenities
+  area        Float? // in square meters
+  description String?        @db.Text
 
-  ownerId     String
-  owner       User     @relation("PropertyOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  monthlyRent     Float? // Indicative rent
+  securityDeposit Float? // Indicative deposit
+  availableFrom   DateTime?
+  images          String[] // Array of image URLs
+  amenities       String[] // Array of amenities
 
-  managerId   String?
-  manager     User?    @relation("PropertyManager", fields: [managerId], references: [id])
+  ownerId String
+  owner   User   @relation("PropertyOwner", fields: [ownerId], references: [id], onDelete: Cascade)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  managerId String?
+  manager   User?   @relation("PropertyManager", fields: [managerId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  leases      Lease[]
+  leases              Lease[]
   maintenanceRequests MaintenanceRequest[]
-  documents   Document[]
+  documents           Document[]
 
   @@map("properties")
 }
 
 model Lease {
-  id          String      @id @default(cuid())
+  id String @id @default(cuid())
 
-  propertyId  String
-  property    Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  tenantId    String
-  tenant      User        @relation("TenantLeases", fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   User   @relation("TenantLeases", fields: [tenantId], references: [id], onDelete: Cascade)
 
-  startDate   DateTime
-  endDate     DateTime
-  rentAmount  Float
-  deposit     Float
+  startDate       DateTime
+  endDate         DateTime
+  monthlyRent     Float
+  securityDeposit Float
 
-  status      LeaseStatus @default(DRAFT)
+  status LeaseStatus @default(DRAFT)
 
-  paymentDay  Int         @default(1) // Day of month for rent payment
+  paymentDay Int @default(1) // Day of month for rent payment
 
-  terms       String?     @db.Text
-  notes       String?     @db.Text
+  terms String? @db.Text
+  notes String? @db.Text
 
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  payments    Payment[]
-  documents   Document[]
+  payments  Payment[]
+  documents Document[]
 
   @@map("leases")
 }
 
 model Payment {
-  id          String        @id @default(cuid())
+  id String @id @default(cuid())
 
-  leaseId     String
-  lease       Lease         @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  leaseId String
+  lease   Lease  @relation(fields: [leaseId], references: [id], onDelete: Cascade)
 
-  tenantId    String
-  tenant      User          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   User   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  amount      Float
-  dueDate     DateTime
-  paidDate    DateTime?
+  amount   Float
+  dueDate  DateTime
+  paidDate DateTime?
 
-  status      PaymentStatus @default(PENDING)
-  method      PaymentMethod?
+  status        PaymentStatus  @default(PENDING)
+  paymentMethod PaymentMethod?
 
-  reference   String?       // Transaction reference
-  notes       String?       @db.Text
+  reference String? // Transaction reference
+  notes     String? @db.Text
 
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("payments")
 }
 
 model MaintenanceRequest {
-  id          String              @id @default(cuid())
+  id          String @id @default(cuid())
   title       String
-  description String              @db.Text
+  description String @db.Text
 
-  propertyId  String
-  property    Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  tenantId    String
-  tenant      User                @relation("TenantMaintenance", fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   User   @relation("TenantMaintenance", fields: [tenantId], references: [id], onDelete: Cascade)
 
   assignedToId String?
-  assignedTo  User?               @relation("AssignedMaintenance", fields: [assignedToId], references: [id])
+  assignedTo   User?   @relation("AssignedMaintenance", fields: [assignedToId], references: [id])
 
-  status      MaintenanceStatus   @default(OPEN)
-  priority    MaintenancePriority @default(MEDIUM)
+  status   MaintenanceStatus   @default(OPEN)
+  priority MaintenancePriority @default(MEDIUM)
 
-  images      String[]            // Array of image URLs
+  images String[] // Array of image URLs
 
-  resolvedAt  DateTime?
+  category      String?
+  scheduledDate DateTime?
+  cost          Float?
+  resolvedAt    DateTime?
 
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  comments    MaintenanceComment[]
+  comments MaintenanceComment[]
 
   @@map("maintenance_requests")
 }
 
 model MaintenanceComment {
-  id          String             @id @default(cuid())
-  content     String             @db.Text
+  id      String @id @default(cuid())
+  content String @db.Text
 
-  requestId   String
-  request     MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  requestId String
+  request   MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
-  authorId    String
-  authorName  String             // Denormalized for performance
-  authorRole  UserRole
+  authorId   String
+  author     User     @relation("MaintenanceCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  authorName String // Denormalized for performance
+  authorRole UserRole
 
-  images      String[]           // Array of image URLs
+  images String[] // Array of image URLs
 
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("maintenance_comments")
 }
 
 model Message {
-  id          String   @id @default(cuid())
-  subject     String
-  content     String   @db.Text
+  id      String @id @default(cuid())
+  subject String
+  content String @db.Text
 
-  senderId    String
-  sender      User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  senderId String
+  sender   User   @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
 
-  receiverId  String
-  receiver    User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver   User   @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
 
-  read        Boolean  @default(false)
-  readAt      DateTime?
+  read   Boolean   @default(false)
+  readAt DateTime?
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@map("messages")
 }
 
 model Notification {
-  id          String           @id @default(cuid())
-  type        NotificationType
-  title       String
-  message     String           @db.Text
+  id      String           @id @default(cuid())
+  type    NotificationType
+  title   String
+  message String           @db.Text
 
-  userId      String
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  read        Boolean          @default(false)
-  readAt      DateTime?
+  read   Boolean   @default(false)
+  readAt DateTime?
 
-  link        String?          // Optional link to related resource
+  link      String? // Optional link to related resource
+  relatedId String? // Id of the related entity (lease, payment...)
 
-  createdAt   DateTime         @default(now())
+  createdAt DateTime @default(now())
 
   @@map("notifications")
 }
 
 model Document {
-  id          String    @id @default(cuid())
-  name        String
-  type        String    // Contract, Invoice, Receipt, etc.
-  url         String
-  size        Int       // File size in bytes
-  mimeType    String
+  id       String @id @default(cuid())
+  name     String
+  type     String // Contract, Invoice, Receipt, etc.
+  url      String
+  size     Int // File size in bytes
+  mimeType String
 
-  propertyId  String?
-  property    Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  leaseId     String?
-  lease       Lease?    @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  leaseId String?
+  lease   Lease?  @relation(fields: [leaseId], references: [id], onDelete: Cascade)
 
   uploadedById String
-  uploadedBy  User      @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  uploadedBy   User   @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("documents")
 }
 
 model Activity {
-  id          String   @id @default(cuid())
-  action      String   // e.g., "created_lease", "updated_property", "made_payment"
-  description String
+  id         String  @id @default(cuid())
+  action     String // e.g., "CREATE_LEASE", "UPDATE_PROPERTY", "MARK_PAYMENT_PAID"
+  entityType String? // e.g., "LEASE", "PROPERTY", "PAYMENT"
+  entityId   String?
+  details    String
 
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  metadata    Json?    // Additional data about the activity
+  metadata Json? // Additional data about the activity
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@map("activities")
 }

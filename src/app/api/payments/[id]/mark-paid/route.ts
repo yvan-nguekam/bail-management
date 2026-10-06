@@ -14,9 +14,10 @@ const markPaidSchema = z.object({
 // POST /api/payments/[id]/mark-paid - Marquer un paiement comme payé
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -27,7 +28,7 @@ export async function POST(
     }
 
     const payment = await prisma.payment.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         lease: {
           include: {
@@ -78,12 +79,12 @@ export async function POST(
 
     // Mettre à jour le paiement
     const updatedPayment = await prisma.payment.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         status: "PAID",
         paidDate: paidDateTime,
         paymentMethod,
-        transactionId,
+        reference: transactionId,
         notes: notes || payment.notes,
       },
       include: {
@@ -133,7 +134,7 @@ export async function POST(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Données invalides", details: error.errors },
+        { error: "Données invalides", details: error.issues },
         { status: 400 }
       );
     }

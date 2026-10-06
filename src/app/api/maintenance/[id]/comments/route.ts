@@ -11,9 +11,10 @@ const commentSchema = z.object({
 // POST /api/maintenance/[id]/comments - Ajouter un commentaire
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -21,7 +22,7 @@ export async function POST(
     }
 
     const maintenanceRequest = await prisma.maintenanceRequest.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         property: true,
         tenant: true,
@@ -49,12 +50,14 @@ export async function POST(
 
     const comment = await prisma.maintenanceComment.create({
       data: {
-        maintenanceRequestId: params.id,
-        userId: session.user.id,
+        requestId: id,
+        authorId: session.user.id,
+        authorName: session.user.name ?? "",
+        authorRole: session.user.role,
         content,
       },
       include: {
-        user: {
+        author: {
           select: {
             id: true,
             name: true,
@@ -81,7 +84,7 @@ export async function POST(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Données invalides", details: error.errors },
+        { error: "Données invalides", details: error.issues },
         { status: 400 }
       );
     }

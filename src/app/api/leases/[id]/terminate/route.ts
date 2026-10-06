@@ -12,9 +12,10 @@ const terminateSchema = z.object({
 // POST /api/leases/[id]/terminate - Résilier un bail
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -25,7 +26,7 @@ export async function POST(
     }
 
     const lease = await prisma.lease.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         property: true,
         tenant: {
@@ -73,7 +74,7 @@ export async function POST(
 
     // Mettre à jour le bail
     const updatedLease = await prisma.lease.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         status: "TERMINATED",
         endDate: termDate,
@@ -108,7 +109,7 @@ export async function POST(
     await prisma.notification.create({
       data: {
         userId: lease.tenantId,
-        type: "LEASE_TERMINATION",
+        type: "LEASE_TERMINATED",
         title: "Résiliation de bail",
         message: `Votre bail pour ${lease.property.name} a été résilié`,
         relatedId: lease.id,
@@ -130,7 +131,7 @@ export async function POST(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Données invalides", details: error.errors },
+        { error: "Données invalides", details: error.issues },
         { status: 400 }
       );
     }

@@ -7,8 +7,9 @@ import { z } from "zod";
 const documentSchema = z.object({
   name: z.string().min(1, "Le nom est requis"),
   type: z.enum(["CONTRACT", "INVOICE", "RECEIPT", "REPORT", "OTHER"]),
-  fileUrl: z.string().url("URL invalide"),
-  fileSize: z.number().positive(),
+  url: z.string().url("URL invalide"),
+  size: z.number().int().positive(),
+  mimeType: z.string().min(1, "Le type MIME est requis"),
   propertyId: z.string().optional(),
   leaseId: z.string().optional(),
 });
@@ -28,8 +29,21 @@ export async function GET(request: NextRequest) {
 
     const where: any = {};
 
+    // Restreindre selon le rôle (les ADMIN voient tout)
     if (session.user.role === "TENANT") {
-      where.uploadedBy = session.user.id;
+      where.OR = [
+        { uploadedById: session.user.id },
+        { lease: { tenantId: session.user.id } },
+      ];
+    } else if (session.user.role !== "ADMIN") {
+      const ownedProperty = {
+        OR: [{ ownerId: session.user.id }, { managerId: session.user.id }],
+      };
+      where.OR = [
+        { uploadedById: session.user.id },
+        { property: ownedProperty },
+        { lease: { property: ownedProperty } },
+      ];
     }
 
     if (propertyId) {
@@ -45,9 +59,9 @@ export async function GET(request: NextRequest) {
       include: {
         property: { select: { id: true, name: true } },
         lease: { select: { id: true } },
-        uploadedByUser: { select: { id: true, name: true } },
+        uploadedBy: { select: { id: true, name: true } },
       },
-      orderBy: { uploadedAt: "desc" },
+      orderBy: { createdAt: "desc" },
     });
 
     return NextResponse.json({ documents });
@@ -69,13 +83,42 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = documentSchema.parse(body);
 
+    // Vérifier l'accès au bien / bail rattaché
+    const isAdmin = session.user.role === "ADMIN";
+    if (validatedData.propertyId && !isAdmin) {
+      const property = await prisma.property.findUnique({
+        where: { id: validatedData.propertyId },
+        select: { ownerId: true, managerId: true },
+      });
+      if (
+        !property ||
+        (property.ownerId !== session.user.id && property.managerId !== session.user.id)
+      ) {
+        return NextResponse.json({ error: "Non autorisé pour cette propriété" }, { status: 403 });
+      }
+    }
+    if (validatedData.leaseId && !isAdmin) {
+      const lease = await prisma.lease.findUnique({
+        where: { id: validatedData.leaseId },
+        select: { tenantId: true, property: { select: { ownerId: true, managerId: true } } },
+      });
+      if (
+        !lease ||
+        (lease.tenantId !== session.user.id &&
+          lease.property.ownerId !== session.user.id &&
+          lease.property.managerId !== session.user.id)
+      ) {
+        return NextResponse.json({ error: "Non autorisé pour ce bail" }, { status: 403 });
+      }
+    }
+
     const document = await prisma.document.create({
       data: {
         ...validatedData,
-        uploadedBy: session.user.id,
+        uploadedById: session.user.id,
       },
       include: {
-        uploadedByUser: { select: { id: true, name: true } },
+        uploadedBy: { select: { id: true, name: true } },
       },
     });
 
@@ -83,7 +126,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Données invalides", details: error.errors },
+        { error: "Données invalides", details: error.issues },
         { status: 400 }
       );
     }
