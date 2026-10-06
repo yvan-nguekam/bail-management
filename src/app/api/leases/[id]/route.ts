@@ -17,9 +17,10 @@ const updateLeaseSchema = z.object({
 // GET /api/leases/[id] - Récupère un bail par ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -30,7 +31,7 @@ export async function GET(
     }
 
     const lease = await prisma.lease.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         property: {
           include: {
@@ -67,7 +68,7 @@ export async function GET(
         },
         documents: {
           orderBy: {
-            uploadedAt: "desc",
+            createdAt: "desc",
           },
         },
       },
@@ -107,9 +108,10 @@ export async function GET(
 // PUT /api/leases/[id] - Met à jour un bail
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -121,7 +123,7 @@ export async function PUT(
 
     // Vérifier que le bail existe
     const existingLease = await prisma.lease.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         property: true,
       },
@@ -171,7 +173,7 @@ export async function PUT(
     }
 
     const lease = await prisma.lease.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData,
       include: {
         property: {
@@ -219,7 +221,7 @@ export async function PUT(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Données invalides", details: error.errors },
+        { error: "Données invalides", details: error.issues },
         { status: 400 }
       );
     }
@@ -235,9 +237,10 @@ export async function PUT(
 // DELETE /api/leases/[id] - Supprime un bail
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -249,7 +252,7 @@ export async function DELETE(
 
     // Vérifier que le bail existe
     const existingLease = await prisma.lease.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         property: true,
         payments: true,
@@ -298,7 +301,7 @@ export async function DELETE(
     }
 
     await prisma.lease.delete({
-      where: { id: params.id },
+      where: { id },
     });
 
     // Créer une entrée d'activité
@@ -307,7 +310,7 @@ export async function DELETE(
         userId: session.user.id,
         action: "DELETE_LEASE",
         entityType: "LEASE",
-        entityId: params.id,
+        entityId: id,
         details: `Bail supprimé pour ${existingLease.property.name}`,
       },
     });

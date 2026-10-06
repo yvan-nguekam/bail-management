@@ -18,9 +18,10 @@ const updatePaymentSchema = z.object({
 // GET /api/payments/[id] - Récupère un paiement par ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -31,7 +32,7 @@ export async function GET(
     }
 
     const payment = await prisma.payment.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         lease: {
           include: {
@@ -94,9 +95,10 @@ export async function GET(
 // PUT /api/payments/[id] - Met à jour un paiement
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -108,7 +110,7 @@ export async function PUT(
 
     // Vérifier que le paiement existe
     const existingPayment = await prisma.payment.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         lease: {
           include: {
@@ -151,7 +153,7 @@ export async function PUT(
     }
 
     const payment = await prisma.payment.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData,
       include: {
         lease: {
@@ -205,7 +207,7 @@ export async function PUT(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Données invalides", details: error.errors },
+        { error: "Données invalides", details: error.issues },
         { status: 400 }
       );
     }
@@ -221,9 +223,10 @@ export async function PUT(
 // DELETE /api/payments/[id] - Supprime un paiement
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -235,7 +238,7 @@ export async function DELETE(
 
     // Vérifier que le paiement existe
     const existingPayment = await prisma.payment.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         lease: {
           include: {
@@ -276,7 +279,7 @@ export async function DELETE(
     }
 
     await prisma.payment.delete({
-      where: { id: params.id },
+      where: { id },
     });
 
     // Créer une entrée d'activité
@@ -285,7 +288,7 @@ export async function DELETE(
         userId: session.user.id,
         action: "DELETE_PAYMENT",
         entityType: "PAYMENT",
-        entityId: params.id,
+        entityId: id,
         details: `Paiement supprimé - ${existingPayment.lease.property.name}`,
       },
     });

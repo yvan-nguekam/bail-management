@@ -13,9 +13,10 @@ const renewSchema = z.object({
 // POST /api/leases/[id]/renew - Renouveler un bail
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -26,7 +27,7 @@ export async function POST(
     }
 
     const lease = await prisma.lease.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         property: true,
         tenant: {
@@ -82,7 +83,7 @@ export async function POST(
 
     // Marquer l'ancien bail comme renouvelé
     await prisma.lease.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         status: "RENEWED",
       },
@@ -143,7 +144,7 @@ export async function POST(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Données invalides", details: error.errors },
+        { error: "Données invalides", details: error.issues },
         { status: 400 }
       );
     }

@@ -3,11 +3,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 
 const updateMaintenanceSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().min(1).optional(),
-  status: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"]).optional(),
+  status: z.enum(["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED", "CANCELLED"]).optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
   category: z.string().optional(),
   assignedToId: z.string().nullable().optional(),
@@ -19,9 +20,10 @@ const updateMaintenanceSchema = z.object({
 // GET /api/maintenance/[id]
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -29,7 +31,7 @@ export async function GET(
     }
 
     const maintenanceRequest = await prisma.maintenanceRequest.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         property: {
           include: {
@@ -46,7 +48,7 @@ export async function GET(
         },
         comments: {
           include: {
-            user: {
+            author: {
               select: { id: true, name: true, email: true },
             },
           },
@@ -81,9 +83,10 @@ export async function GET(
 // PUT /api/maintenance/[id]
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -91,7 +94,7 @@ export async function PUT(
     }
 
     const existing = await prisma.maintenanceRequest.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { property: true, tenant: true },
     });
 
@@ -111,16 +114,19 @@ export async function PUT(
     const body = await request.json();
     const validatedData = updateMaintenanceSchema.parse(body);
 
-    const updateData: any = { ...validatedData };
-    if (validatedData.scheduledDate) {
-      updateData.scheduledDate = new Date(validatedData.scheduledDate);
+    const { scheduledDate, completedDate, ...rest } = validatedData;
+    const updateData: Prisma.MaintenanceRequestUncheckedUpdateInput = { ...rest };
+    if (scheduledDate !== undefined) {
+      updateData.scheduledDate = scheduledDate ? new Date(scheduledDate) : null;
     }
-    if (validatedData.completedDate) {
-      updateData.completedDate = new Date(validatedData.completedDate);
+    if (completedDate !== undefined) {
+      updateData.resolvedAt = completedDate ? new Date(completedDate) : null;
+    } else if (rest.status === "RESOLVED" && !existing.resolvedAt) {
+      updateData.resolvedAt = new Date();
     }
 
     const updated = await prisma.maintenanceRequest.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData,
       include: {
         property: { select: { id: true, name: true } },
@@ -155,7 +161,7 @@ export async function PUT(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Données invalides", details: error.errors },
+        { error: "Données invalides", details: error.issues },
         { status: 400 }
       );
     }
@@ -167,9 +173,10 @@ export async function PUT(
 // DELETE /api/maintenance/[id]
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -177,7 +184,7 @@ export async function DELETE(
     }
 
     const existing = await prisma.maintenanceRequest.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { property: true },
     });
 
@@ -195,7 +202,7 @@ export async function DELETE(
     }
 
     await prisma.maintenanceRequest.delete({
-      where: { id: params.id },
+      where: { id },
     });
 
     await prisma.activity.create({
@@ -203,7 +210,7 @@ export async function DELETE(
         userId: session.user.id,
         action: "DELETE_MAINTENANCE_REQUEST",
         entityType: "MAINTENANCE_REQUEST",
-        entityId: params.id,
+        entityId: id,
         details: `Demande supprimée: ${existing.title}`,
       },
     });

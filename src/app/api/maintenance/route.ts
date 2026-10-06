@@ -178,7 +178,7 @@ export async function POST(request: NextRequest) {
         ...validatedData,
         tenantId: session.user.id,
         priority: validatedData.priority || "MEDIUM",
-        status: "PENDING",
+        status: "OPEN",
       },
       include: {
         property: {
@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Données invalides", details: error.errors },
+        { error: "Données invalides", details: error.issues },
         { status: 400 }
       );
     }

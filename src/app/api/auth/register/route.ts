@@ -1,19 +1,29 @@
 import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
-import { UserRole } from "@prisma/client"
+import { z } from "zod"
+
+// ADMIN ne peut jamais être choisi à l'inscription publique
+const registerSchema = z.object({
+  name: z.string().trim().min(1, "Le nom est requis"),
+  email: z.string().trim().toLowerCase().email("Email invalide"),
+  password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères"),
+  phone: z.string().trim().optional(),
+  role: z.enum(["TENANT", "LANDLORD", "MANAGER"]).default("TENANT"),
+})
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { email, password, name, role, phone } = body
+    const parsed = registerSchema.safeParse(await request.json())
 
-    if (!email || !password || !name) {
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: parsed.error.issues[0]?.message ?? "Invalid data", details: parsed.error.issues },
         { status: 400 }
       )
     }
+
+    const { email, password, name, role, phone } = parsed.data
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -37,7 +47,7 @@ export async function POST(request: Request) {
         password: hashedPassword,
         name,
         phone: phone || null,
-        role: role || UserRole.TENANT,
+        role,
       },
       select: {
         id: true,
@@ -52,8 +62,10 @@ export async function POST(request: Request) {
     // Log activity
     await prisma.activity.create({
       data: {
-        action: "user_registered",
-        description: `${user.name} registered as ${user.role}`,
+        action: "USER_REGISTERED",
+        entityType: "USER",
+        entityId: user.id,
+        details: `${user.name} registered as ${user.role}`,
         userId: user.id,
       }
     })

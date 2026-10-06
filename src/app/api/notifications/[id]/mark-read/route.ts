@@ -6,9 +6,10 @@ import { prisma } from "@/lib/prisma";
 // POST /api/notifications/[id]/mark-read
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -16,7 +17,7 @@ export async function POST(
     }
 
     const notification = await prisma.notification.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!notification) {
@@ -28,7 +29,7 @@ export async function POST(
     }
 
     const updated = await prisma.notification.update({
-      where: { id: params.id },
+      where: { id },
       data: { read: true },
     });
 

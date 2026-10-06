@@ -4,9 +4,9 @@ import "../globals.css";
 import AuthProvider from "@/components/providers/session-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { NextIntlClientProvider } from "next-intl";
-import { getMessages } from "next-intl/server";
+import { getMessages, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
-import { locales } from "@/i18n";
+import { locales, isLocale } from "@/i18n/routing";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -24,15 +24,19 @@ export function generateStaticParams() {
 
 export default async function LocaleLayout({
   children,
-  params: { locale }
+  params,
 }: {
   children: React.ReactNode;
-  params: { locale: string };
+  params: Promise<{ locale: string }>;
 }) {
+  const { locale } = await params;
+
   // Validate locale
-  if (!locales.includes(locale as any)) {
+  if (!isLocale(locale)) {
     notFound();
   }
+
+  setRequestLocale(locale);
 
   // Get messages for the current locale
   const messages = await getMessages();

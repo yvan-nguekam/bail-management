@@ -5,10 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 const messageSchema = z.object({
-  recipientId: z.string().min(1, "Le destinataire est requis"),
+  receiverId: z.string().min(1, "Le destinataire est requis"),
   subject: z.string().min(1, "Le sujet est requis"),
   content: z.string().min(1, "Le contenu est requis"),
-  propertyId: z.string().optional(),
 });
 
 // GET /api/messages - Liste des conversations
@@ -24,18 +23,15 @@ export async function GET(request: NextRequest) {
       where: {
         OR: [
           { senderId: session.user.id },
-          { recipientId: session.user.id },
+          { receiverId: session.user.id },
         ],
       },
       include: {
         sender: {
           select: { id: true, name: true, email: true },
         },
-        recipient: {
+        receiver: {
           select: { id: true, name: true, email: true },
-        },
-        property: {
-          select: { id: true, name: true },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -60,6 +56,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = messageSchema.parse(body);
 
+    const receiver = await prisma.user.findUnique({
+      where: { id: validatedData.receiverId },
+      select: { id: true },
+    });
+
+    if (!receiver) {
+      return NextResponse.json({ error: "Destinataire non trouvé" }, { status: 404 });
+    }
+
     const message = await prisma.message.create({
       data: {
         ...validatedData,
@@ -67,15 +72,15 @@ export async function POST(request: NextRequest) {
       },
       include: {
         sender: { select: { id: true, name: true, email: true } },
-        recipient: { select: { id: true, name: true, email: true } },
+        receiver: { select: { id: true, name: true, email: true } },
       },
     });
 
     // Créer une notification pour le destinataire
     await prisma.notification.create({
       data: {
-        userId: validatedData.recipientId,
-        type: "MESSAGE_RECEIVED",
+        userId: validatedData.receiverId,
+        type: "MESSAGE",
         title: "Nouveau message",
         message: `${session.user.name}: ${validatedData.subject}`,
         relatedId: message.id,
@@ -86,7 +91,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Données invalides", details: error.errors },
+        { error: "Données invalides", details: error.issues },
         { status: 400 }
       );
     }
