@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
+import { syncLeaseSchedule } from "@/lib/lease-schedule";
 
 // Schema de validation pour mise à jour
 const updateLeaseSchema = z.object({
@@ -10,6 +12,7 @@ const updateLeaseSchema = z.object({
   endDate: z.string().datetime().optional(),
   monthlyRent: z.number().positive().optional(),
   securityDeposit: z.number().nonnegative().optional(),
+  paymentDay: z.number().int().min(1).max(31).optional(),
   terms: z.string().optional(),
   status: z.enum(["DRAFT", "ACTIVE", "EXPIRED", "TERMINATED", "RENEWED"]).optional(),
 });
@@ -63,7 +66,7 @@ export async function GET(
         },
         payments: {
           orderBy: {
-            dueDate: "desc",
+            dueDate: "asc",
           },
         },
         documents: {
@@ -153,17 +156,15 @@ export async function PUT(
     const validatedData = updateLeaseSchema.parse(body);
 
     // Convertir les dates si présentes
-    const updateData: any = { ...validatedData };
-    if (validatedData.startDate) {
-      updateData.startDate = new Date(validatedData.startDate);
-    }
-    if (validatedData.endDate) {
-      updateData.endDate = new Date(validatedData.endDate);
-    }
+    const updateData: Prisma.LeaseUncheckedUpdateInput = {
+      ...validatedData,
+      startDate: validatedData.startDate ? new Date(validatedData.startDate) : undefined,
+      endDate: validatedData.endDate ? new Date(validatedData.endDate) : undefined,
+    };
 
     // Vérifier que la date de fin est après la date de début
-    const startDate = updateData.startDate || existingLease.startDate;
-    const endDate = updateData.endDate || existingLease.endDate;
+    const startDate = (updateData.startDate as Date | undefined) ?? existingLease.startDate;
+    const endDate = (updateData.endDate as Date | undefined) ?? existingLease.endDate;
 
     if (endDate <= startDate) {
       return NextResponse.json(
@@ -172,26 +173,42 @@ export async function PUT(
       );
     }
 
-    const lease = await prisma.lease.update({
-      where: { id },
-      data: updateData,
-      include: {
-        property: {
-          select: {
-            id: true,
-            name: true,
-            address: true,
-            city: true,
+    // Les échéances impayées suivent les nouvelles conditions financières du bail
+    const scheduleTermsChanged =
+      (validatedData.startDate !== undefined && startDate.getTime() !== existingLease.startDate.getTime()) ||
+      (validatedData.endDate !== undefined && endDate.getTime() !== existingLease.endDate.getTime()) ||
+      (validatedData.monthlyRent !== undefined && validatedData.monthlyRent !== existingLease.monthlyRent) ||
+      (validatedData.paymentDay !== undefined && validatedData.paymentDay !== existingLease.paymentDay);
+    const finalStatus = validatedData.status ?? existingLease.status;
+    const shouldSyncSchedule =
+      scheduleTermsChanged && ["DRAFT", "ACTIVE"].includes(finalStatus);
+
+    const { lease, schedule } = await prisma.$transaction(async (tx) => {
+      const lease = await tx.lease.update({
+        where: { id },
+        data: updateData,
+        include: {
+          property: {
+            select: {
+              id: true,
+              name: true,
+              address: true,
+              city: true,
+            },
+          },
+          tenant: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
         },
-        tenant: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
+      });
+
+      const schedule = shouldSyncSchedule ? await syncLeaseSchedule(tx, lease) : null;
+
+      return { lease, schedule };
     });
 
     // Si le statut change vers TERMINATED ou EXPIRED, mettre à jour la propriété
@@ -217,7 +234,7 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json(lease);
+    return NextResponse.json({ ...lease, schedule });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -289,12 +306,13 @@ export async function DELETE(
       );
     }
 
-    // Empêcher la suppression s'il y a des paiements
-    if (existingLease.payments.length > 0) {
+    // Empêcher la suppression s'il y a des paiements encaissés
+    // (les échéances non payées sont supprimées avec le bail)
+    if (existingLease.payments.some((payment) => payment.status === "PAID")) {
       return NextResponse.json(
         {
           error:
-            "Impossible de supprimer un bail avec des paiements associés",
+            "Impossible de supprimer un bail avec des paiements encaissés",
         },
         { status: 400 }
       );

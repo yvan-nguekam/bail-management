@@ -32,6 +32,11 @@ const leaseSchema = z.object({
   endDate: z.string().min(1, "La date de fin est requise"),
   monthlyRent: z.coerce.number().positive("Le loyer doit être positif"),
   securityDeposit: z.coerce.number().nonnegative("La caution doit être 0 ou plus"),
+  paymentDay: z.coerce
+    .number()
+    .int()
+    .min(1, "Entre 1 et 31")
+    .max(31, "Entre 1 et 31"),
   status: z.enum(["DRAFT", "ACTIVE", "EXPIRED", "TERMINATED", "RENEWED"]),
   terms: z.string().optional(),
 });
@@ -76,6 +81,7 @@ export default function EditLeasePage() {
         endDate,
         monthlyRent: lease.monthlyRent,
         securityDeposit: lease.securityDeposit,
+        paymentDay: lease.paymentDay,
         status: lease.status,
         terms: lease.terms || "",
       });
@@ -221,7 +227,7 @@ export default function EditLeasePage() {
               <CardTitle>Informations financières</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
                 <FormField
                   control={form.control}
                   name="monthlyRent"
@@ -249,7 +255,25 @@ export default function EditLeasePage() {
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={form.control}
+                  name="paymentDay"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Jour de paiement</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="1" max="31" {...field} value={field.value as number} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
+              <p className="text-sm text-muted-foreground">
+                Modifier les dates, le loyer ou le jour de paiement recalcule les échéances non
+                payées. Les échéances déjà payées ou annulées ne sont pas modifiées.
+              </p>
             </CardContent>
           </Card>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,7 +25,10 @@ import {
   FormMessage,
   FormDescription,
 } from "@/components/ui/form";
-import { ArrowLeft, Loader2, FileText, Building2, User } from "lucide-react";
+import { ArrowLeft, Loader2, FileText, Building2, User, CalendarClock } from "lucide-react";
+import { PaymentScheduleTable } from "@/components/leases/payment-schedule-table";
+import { generatePaymentSchedule, scheduleTotal } from "@/lib/payment-schedule";
+import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 
 const leaseSchema = z.object({
@@ -35,6 +38,12 @@ const leaseSchema = z.object({
   endDate: z.string().min(1, "La date de fin est requise"),
   monthlyRent: z.coerce.number().positive("Le loyer doit être positif"),
   securityDeposit: z.coerce.number().nonnegative("La caution doit être 0 ou plus"),
+  paymentDay: z.coerce
+    .number()
+    .int()
+    .min(1, "Entre 1 et 31")
+    .max(31, "Entre 1 et 31"),
+  generateSchedule: z.boolean(),
   terms: z.string().optional(),
 });
 
@@ -74,9 +83,33 @@ export default function NewLeasePage() {
       endDate: "",
       monthlyRent: 0,
       securityDeposit: 0,
+      paymentDay: 1,
+      generateSchedule: true,
       terms: "",
     },
   });
+
+  const [startDate, endDate, monthlyRent, paymentDay, generateSchedule] = form.watch([
+    "startDate",
+    "endDate",
+    "monthlyRent",
+    "paymentDay",
+    "generateSchedule",
+  ]);
+
+  // Aperçu calculé avec la même règle que le serveur
+  const schedulePreview = useMemo(
+    () =>
+      startDate && endDate
+        ? generatePaymentSchedule({
+            startDate: new Date(startDate),
+            endDate: new Date(endDate),
+            monthlyRent: Number(monthlyRent),
+            paymentDay: Number(paymentDay),
+          })
+        : [],
+    [startDate, endDate, monthlyRent, paymentDay]
+  );
 
   useEffect(() => {
     fetchData();
@@ -320,7 +353,7 @@ export default function NewLeasePage() {
               <CardTitle>Informations financières</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
                 <FormField
                   control={form.control}
                   name="monthlyRent"
@@ -354,7 +387,82 @@ export default function NewLeasePage() {
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={form.control}
+                  name="paymentDay"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Jour de paiement</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="1" max="31" {...field} value={field.value as number} />
+                      </FormControl>
+                      <FormDescription>
+                        Jour du mois où le loyer est dû
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Échéancier des loyers */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarClock className="h-5 w-5" />
+                Échéancier des loyers
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="generateSchedule"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start gap-3 space-y-0">
+                    <FormControl>
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 accent-primary"
+                        checked={field.value}
+                        onChange={(event) => field.onChange(event.target.checked)}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                      />
+                    </FormControl>
+                    <div className="space-y-1">
+                      <FormLabel>Générer automatiquement les échéances</FormLabel>
+                      <FormDescription>
+                        Une échéance par mois, du début à la fin du bail. Le premier et le
+                        dernier mois incomplets sont calculés au prorata.
+                      </FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
+
+              {generateSchedule &&
+                (schedulePreview.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      {schedulePreview.length} échéance
+                      {schedulePreview.length > 1 ? "s" : ""} pour un total de{" "}
+                      <span className="font-medium text-foreground">
+                        {formatCurrency(scheduleTotal(schedulePreview))}
+                      </span>
+                    </p>
+                    <div className="max-h-72 overflow-y-auto rounded-md border">
+                      <PaymentScheduleTable rows={schedulePreview} />
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Renseignez les dates et le loyer pour voir l&apos;aperçu de l&apos;échéancier.
+                  </p>
+                ))}
             </CardContent>
           </Card>
 

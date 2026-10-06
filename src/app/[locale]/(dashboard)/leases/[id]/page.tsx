@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +23,10 @@ import {
   RefreshCw,
   XCircle,
   AlertCircle,
+  CalendarClock,
 } from "lucide-react";
+import { PaymentScheduleTable } from "@/components/leases/payment-schedule-table";
+import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -73,6 +77,8 @@ interface Lease {
     id: string;
     amount: number;
     dueDate: string;
+    periodStart: string | null;
+    periodEnd: string | null;
     status: string;
   }>;
 }
@@ -96,6 +102,7 @@ const statusColors: Record<string, "default" | "secondary" | "destructive" | "ou
 export default function LeaseDetailsPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const { data: session } = useSession();
   const [lease, setLease] = useState<Lease | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -104,6 +111,8 @@ export default function LeaseDetailsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRenewing, setIsRenewing] = useState(false);
   const [isTerminating, setIsTerminating] = useState(false);
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [isSyncingSchedule, setIsSyncingSchedule] = useState(false);
 
   const [renewEndDate, setRenewEndDate] = useState("");
   const [renewRent, setRenewRent] = useState("");
@@ -237,6 +246,36 @@ export default function LeaseDetailsPage() {
     }
   };
 
+  const handleSyncSchedule = async () => {
+    setIsSyncingSchedule(true);
+    try {
+      const response = await fetch(`/api/leases/${params.id}/schedule`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Erreur lors de la génération de l'échéancier");
+      }
+
+      const result = await response.json();
+      toast.success(
+        `Échéancier mis à jour : ${result.created} échéance(s) générée(s), ${result.kept} conservée(s)`
+      );
+      fetchLease();
+    } catch (error) {
+      console.error("Erreur:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Erreur lors de la génération de l'échéancier"
+      );
+    } finally {
+      setIsSyncingSchedule(false);
+      setScheduleDialogOpen(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -253,6 +292,16 @@ export default function LeaseDetailsPage() {
     (new Date(lease.endDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
   );
   const isExpiringSoon = lease.status === "ACTIVE" && daysUntilExpiry > 0 && daysUntilExpiry <= 30;
+
+  const canManageSchedule =
+    !!session?.user && session.user.role !== "TENANT" && lease.status !== "RENEWED";
+  const billedPayments = lease.payments.filter((p) => p.status !== "CANCELLED");
+  const totalPaid = billedPayments
+    .filter((p) => p.status === "PAID")
+    .reduce((sum, p) => sum + p.amount, 0);
+  const totalDue = billedPayments
+    .filter((p) => p.status !== "PAID")
+    .reduce((sum, p) => sum + p.amount, 0);
 
   return (
     <div className="space-y-6">
@@ -442,14 +491,82 @@ export default function LeaseDetailsPage() {
         </div>
       </div>
 
+      {/* Échéancier des loyers */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="flex items-center gap-2">
+            <CalendarClock className="h-5 w-5" />
+            Échéancier des loyers
+          </CardTitle>
+          {canManageSchedule && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setScheduleDialogOpen(true)}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              {lease.payments.length > 0 ? "Régénérer" : "Générer"}
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {lease.payments.length > 0 ? (
+            <>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <p className="text-sm text-muted-foreground">Échéances</p>
+                  <p className="font-semibold">{billedPayments.length}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Payé</p>
+                  <p className="font-semibold">{formatCurrency(totalPaid)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Restant dû</p>
+                  <p className="font-semibold">{formatCurrency(totalDue)}</p>
+                </div>
+              </div>
+              <div className="rounded-md border">
+                <PaymentScheduleTable rows={lease.payments} />
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Aucune échéance pour ce bail.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Dialog de génération de l'échéancier */}
+      <AlertDialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Régénérer l&apos;échéancier ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Les échéances non payées seront recalculées à partir des dates, du loyer et du
+              jour de paiement actuels du bail. Les échéances payées ou annulées sont
+              conservées.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSyncingSchedule}>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSyncSchedule} disabled={isSyncingSchedule}>
+              {isSyncingSchedule && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Régénérer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Dialog de suppression */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
             <AlertDialogDescription>
-              Êtes-vous sûr de vouloir supprimer ce bail ? Cette action est
-              irréversible.
+              Êtes-vous sûr de vouloir supprimer ce bail ? Ses échéances non payées
+              seront également supprimées. Cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
