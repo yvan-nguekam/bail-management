@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { syncLeaseSchedule } from "@/lib/lease-schedule";
 
 // Schema de validation pour un bail
 const leaseSchema = z.object({
@@ -12,7 +13,10 @@ const leaseSchema = z.object({
   endDate: z.string().datetime(),
   monthlyRent: z.number().positive("Le loyer doit être positif"),
   securityDeposit: z.number().nonnegative("La caution doit être 0 ou plus"),
+  paymentDay: z.number().int().min(1).max(31).default(1),
   terms: z.string().optional(),
+  // Génère automatiquement les échéances mensuelles du bail
+  generateSchedule: z.boolean().default(true),
 });
 
 // GET /api/leases - Liste tous les baux
@@ -142,7 +146,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const validatedData = leaseSchema.parse(body);
+    const { generateSchedule, ...validatedData } = leaseSchema.parse(body);
 
     // Vérifier que la propriété existe et appartient à l'utilisateur
     const property = await prisma.property.findUnique({
@@ -195,39 +199,45 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const lease = await prisma.lease.create({
-      data: {
-        ...validatedData,
-        startDate,
-        endDate,
-        status: startDate <= new Date() ? "ACTIVE" : "DRAFT",
-      },
-      include: {
-        property: {
-          select: {
-            id: true,
-            name: true,
-            address: true,
-            city: true,
+    const { lease, schedule } = await prisma.$transaction(async (tx) => {
+      const lease = await tx.lease.create({
+        data: {
+          ...validatedData,
+          startDate,
+          endDate,
+          status: startDate <= new Date() ? "ACTIVE" : "DRAFT",
+        },
+        include: {
+          property: {
+            select: {
+              id: true,
+              name: true,
+              address: true,
+              city: true,
+            },
+          },
+          tenant: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
         },
-        tenant: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
-
-    // Mettre à jour le statut de la propriété
-    if (lease.status === "ACTIVE") {
-      await prisma.property.update({
-        where: { id: validatedData.propertyId },
-        data: { status: "OCCUPIED" },
       });
-    }
+
+      const schedule = generateSchedule ? await syncLeaseSchedule(tx, lease) : null;
+
+      // Mettre à jour le statut de la propriété
+      if (lease.status === "ACTIVE") {
+        await tx.property.update({
+          where: { id: validatedData.propertyId },
+          data: { status: "OCCUPIED" },
+        });
+      }
+
+      return { lease, schedule };
+    });
 
     // Créer une entrée d'activité
     await prisma.activity.create({
@@ -251,7 +261,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(lease, { status: 201 });
+    return NextResponse.json({ ...lease, schedule }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

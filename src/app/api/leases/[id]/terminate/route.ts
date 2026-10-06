@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { syncLeaseSchedule } from "@/lib/lease-schedule";
 
 const terminateSchema = z.object({
   terminationDate: z.string().datetime(),
@@ -72,37 +73,51 @@ export async function POST(
 
     const termDate = new Date(terminationDate);
 
-    // Mettre à jour le bail
-    const updatedLease = await prisma.lease.update({
-      where: { id },
-      data: {
-        status: "TERMINATED",
-        endDate: termDate,
-        terms: reason
-          ? `${lease.terms || ""}\n\nRésiliation: ${reason}`
-          : lease.terms,
-      },
-      include: {
-        property: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        tenant: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
+    if (termDate < lease.startDate || termDate > lease.endDate) {
+      return NextResponse.json(
+        { error: "La date de résiliation doit être comprise dans la durée du bail" },
+        { status: 400 }
+      );
+    }
 
-    // Mettre à jour le statut de la propriété
-    await prisma.property.update({
-      where: { id: lease.propertyId },
-      data: { status: "AVAILABLE" },
+    const updatedLease = await prisma.$transaction(async (tx) => {
+      // Mettre à jour le bail
+      const updatedLease = await tx.lease.update({
+        where: { id },
+        data: {
+          status: "TERMINATED",
+          endDate: termDate,
+          terms: reason
+            ? `${lease.terms || ""}\n\nRésiliation: ${reason}`
+            : lease.terms,
+        },
+        include: {
+          property: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          tenant: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
+
+      // Échéances impayées recalculées jusqu'à la date de résiliation (dernier mois au prorata)
+      await syncLeaseSchedule(tx, updatedLease);
+
+      // Mettre à jour le statut de la propriété
+      await tx.property.update({
+        where: { id: lease.propertyId },
+        data: { status: "AVAILABLE" },
+      });
+
+      return updatedLease;
     });
 
     // Créer une notification pour le locataire

@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { syncLeaseSchedule } from "@/lib/lease-schedule";
+import { addUtcDays } from "@/lib/payment-schedule";
 
 const renewSchema = z.object({
   newEndDate: z.string().datetime(),
@@ -72,6 +74,8 @@ export async function POST(
     const { newEndDate, newMonthlyRent, terms } = renewSchema.parse(body);
 
     const endDate = new Date(newEndDate);
+    // Le nouveau bail prend la suite de l'ancien, sans chevauchement d'échéances
+    const startDate = addUtcDays(lease.endDate, 1);
 
     // Vérifier que la nouvelle date de fin est après la date actuelle
     if (endDate <= new Date()) {
@@ -81,41 +85,55 @@ export async function POST(
       );
     }
 
-    // Marquer l'ancien bail comme renouvelé
-    await prisma.lease.update({
-      where: { id },
-      data: {
-        status: "RENEWED",
-      },
-    });
+    if (endDate < startDate) {
+      return NextResponse.json(
+        { error: "La nouvelle date de fin doit être après la fin du bail actuel" },
+        { status: 400 }
+      );
+    }
 
-    // Créer un nouveau bail
-    const newLease = await prisma.lease.create({
-      data: {
-        propertyId: lease.propertyId,
-        tenantId: lease.tenantId,
-        startDate: new Date(),
-        endDate: endDate,
-        monthlyRent: newMonthlyRent || lease.monthlyRent,
-        securityDeposit: lease.securityDeposit,
-        terms: terms || `Renouvellement du bail #${lease.id}`,
-        status: "ACTIVE",
-      },
-      include: {
-        property: {
-          select: {
-            id: true,
-            name: true,
+    const newLease = await prisma.$transaction(async (tx) => {
+      // Marquer l'ancien bail comme renouvelé
+      await tx.lease.update({
+        where: { id },
+        data: {
+          status: "RENEWED",
+        },
+      });
+
+      // Créer un nouveau bail
+      const newLease = await tx.lease.create({
+        data: {
+          propertyId: lease.propertyId,
+          tenantId: lease.tenantId,
+          startDate,
+          endDate: endDate,
+          monthlyRent: newMonthlyRent || lease.monthlyRent,
+          securityDeposit: lease.securityDeposit,
+          paymentDay: lease.paymentDay,
+          terms: terms || `Renouvellement du bail #${lease.id}`,
+          status: "ACTIVE",
+        },
+        include: {
+          property: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          tenant: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
         },
-        tenant: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
+      });
+
+      await syncLeaseSchedule(tx, newLease);
+
+      return newLease;
     });
 
     // Créer une notification pour le locataire

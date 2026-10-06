@@ -52,6 +52,8 @@ interface Payment {
   id: string;
   amount: number;
   dueDate: string;
+  periodStart: string | null;
+  periodEnd: string | null;
   paidDate: string | null;
   status: string;
   paymentMethod: string | null;
@@ -300,11 +302,21 @@ export default function PaymentDetailsPage() {
                     Date d'échéance
                   </p>
                   <p className="font-semibold">
-                    {new Date(payment.dueDate).toLocaleDateString("fr-FR")}
+                    {new Date(payment.dueDate).toLocaleDateString("fr-FR", { timeZone: "UTC" })}
                   </p>
                 </div>
               </div>
             </div>
+
+            {payment.periodStart && payment.periodEnd && (
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Période couverte</p>
+                <p className="font-medium">
+                  Du {new Date(payment.periodStart).toLocaleDateString("fr-FR", { timeZone: "UTC" })} au{" "}
+                  {new Date(payment.periodEnd).toLocaleDateString("fr-FR", { timeZone: "UTC" })}
+                </p>
+              </div>
+            )}
 
             {payment.status === "PAID" && (
               <>
