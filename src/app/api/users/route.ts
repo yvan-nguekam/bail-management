@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma, UserRole } from "@prisma/client";
 
 // GET /api/users - Liste des utilisateurs (pour sélection de locataires)
 export async function GET(request: NextRequest) {
@@ -26,10 +27,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const where: any = {};
+    const where: Prisma.UserWhereInput = {};
 
-    if (role) {
-      where.role = role;
+    if (session.user.role !== "ADMIN") {
+      // Bailleurs et gestionnaires ne peuvent lister que des locataires
+      // (sélecteur du formulaire de bail), jamais les autres comptes
+      where.role = "TENANT";
+    } else if (role && (Object.values(UserRole) as string[]).includes(role)) {
+      where.role = role as UserRole;
     }
 
     const users = await prisma.user.findMany({
