@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PageHeader } from "@/components/shared/page-header";
+import { EmptyState } from "@/components/shared/empty-state";
+import { TableSkeleton } from "@/components/shared/page-skeleton";
 import { StatCard } from "@/components/dashboard/stat-card";
 import {
   MaintenancePriorityBadge,
@@ -36,11 +40,10 @@ import {
 } from "@/lib/maintenance";
 import {
   AlertCircle,
-  Building2,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
-  Eye,
-  Loader2,
   MessageSquare,
   Plus,
   Wrench,
@@ -115,177 +118,201 @@ export default function MaintenancePage() {
     setPagination((prev) => ({ ...prev, page: 1 }));
   };
 
+  const hasFilters = statusFilter !== "all" || priorityFilter !== "all";
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Maintenance</h1>
-          <p className="text-muted-foreground">
-            Suivez les demandes d&apos;intervention sur vos biens
-          </p>
-        </div>
-        <Button onClick={() => router.push("/maintenance/new")}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nouvelle demande
-        </Button>
-      </div>
+      <PageHeader
+        title="Maintenance"
+        description="Suivez les demandes d'intervention sur vos biens"
+        actions={
+          <Button asChild>
+            <Link href="/maintenance/new">
+              <Plus className="h-4 w-4" aria-hidden />
+              Nouvelle demande
+            </Link>
+          </Button>
+        }
+      />
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
+          index={0}
           title="Ouvertes"
           value={stats.OPEN}
           description="En attente de prise en charge"
           icon={AlertCircle}
+          tone="info"
         />
         <StatCard
+          index={1}
           title="En cours"
           value={stats.IN_PROGRESS}
           description="Interventions en cours"
           icon={Clock}
+          tone="warning"
         />
         <StatCard
+          index={2}
           title="Résolues"
           value={stats.RESOLVED + stats.CLOSED}
           description={`Dont ${stats.CLOSED} clôturée${stats.CLOSED > 1 ? "s" : ""}`}
           icon={CheckCircle2}
+          tone="success"
         />
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <Card className="animate-fade-up" style={{ "--stagger": 3 } as React.CSSProperties}>
+        <CardHeader className="gap-4 border-b sm:flex sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
             <CardTitle className="flex items-center gap-2">
-              <Wrench className="h-5 w-5" />
-              Demandes ({pagination.total})
+              <Wrench className="h-4 w-4 text-muted-foreground" aria-hidden />
+              Demandes
             </CardTitle>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Select value={statusFilter} onValueChange={changeFilter(setStatusFilter)}>
-                <SelectTrigger className="w-full sm:w-[170px]">
-                  <SelectValue placeholder="Statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les statuts</SelectItem>
-                  {MAINTENANCE_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {maintenanceStatusLabels[s]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={priorityFilter}
-                onValueChange={changeFilter(setPriorityFilter)}
-              >
-                <SelectTrigger className="w-full sm:w-[170px]">
-                  <SelectValue placeholder="Priorité" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes priorités</SelectItem>
-                  {MAINTENANCE_PRIORITIES.map((p) => (
-                    <SelectItem key={p} value={p}>
-                      {maintenancePriorityLabels[p]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <p className="text-sm text-muted-foreground tabular-nums">
+              {pagination.total} demande{pagination.total > 1 ? "s" : ""}
+            </p>
+          </div>
+          <div className="grid gap-2 sm:flex sm:items-center">
+            <Select value={statusFilter} onValueChange={changeFilter(setStatusFilter)}>
+              <SelectTrigger className="w-full sm:w-[170px]" aria-label="Filtrer par statut">
+                <SelectValue placeholder="Statut" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les statuts</SelectItem>
+                {MAINTENANCE_STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {maintenanceStatusLabels[s]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={priorityFilter} onValueChange={changeFilter(setPriorityFilter)}>
+              <SelectTrigger className="w-full sm:w-[170px]" aria-label="Filtrer par priorité">
+                <SelectValue placeholder="Priorité" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes priorités</SelectItem>
+                {MAINTENANCE_PRIORITIES.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {maintenancePriorityLabels[p]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
+            <TableSkeleton rows={6} />
           ) : requests.length === 0 ? (
-            <div className="text-center py-12">
-              <Wrench className="mx-auto h-12 w-12 text-muted-foreground" />
-              <h3 className="mt-4 text-lg font-semibold">Aucune demande trouvée</h3>
-              <p className="text-muted-foreground">
-                {statusFilter !== "all" || priorityFilter !== "all"
-                  ? "Aucune demande ne correspond à ces filtres"
-                  : "Aucune demande de maintenance pour le moment"}
-              </p>
-            </div>
+            <EmptyState
+              icon={Wrench}
+              title="Aucune demande trouvée"
+              description={
+                hasFilters
+                  ? "Aucune demande ne correspond à ces filtres."
+                  : "Aucune demande de maintenance pour le moment."
+              }
+              action={
+                hasFilters ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setStatusFilter("all");
+                      setPriorityFilter("all");
+                      setPagination((prev) => ({ ...prev, page: 1 }));
+                    }}
+                  >
+                    Réinitialiser les filtres
+                  </Button>
+                ) : (
+                  <Button asChild>
+                    <Link href="/maintenance/new">
+                      <Plus className="h-4 w-4" aria-hidden />
+                      Nouvelle demande
+                    </Link>
+                  </Button>
+                )
+              }
+            />
           ) : (
             <>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Demande</TableHead>
-                      <TableHead>Propriété</TableHead>
-                      <TableHead>Demandeur</TableHead>
-                      <TableHead>Priorité</TableHead>
-                      <TableHead>Statut</TableHead>
-                      <TableHead>Créée le</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Demande</TableHead>
+                    <TableHead className="hidden md:table-cell">Bien</TableHead>
+                    <TableHead className="hidden lg:table-cell">Demandeur</TableHead>
+                    <TableHead>Priorité</TableHead>
+                    <TableHead>Statut</TableHead>
+                    <TableHead className="hidden sm:table-cell text-right">Créée le</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {requests.map((request) => (
+                    <TableRow
+                      key={request.id}
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => router.push(`/maintenance/${request.id}`)}
+                    >
+                      <TableCell className="max-w-[260px] py-3">
+                        <Link
+                          href={`/maintenance/${request.id}`}
+                          className="block truncate font-medium hover:text-primary"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {request.title}
+                        </Link>
+                        <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+                          {request.category && (
+                            <span className="truncate">{request.category}</span>
+                          )}
+                          {request.comments.length > 0 && (
+                            <span
+                              className="flex items-center gap-1 tabular-nums"
+                              aria-label={`${request.comments.length} commentaire${
+                                request.comments.length > 1 ? "s" : ""
+                              }`}
+                            >
+                              <MessageSquare className="h-3 w-3" aria-hidden />
+                              {request.comments.length}
+                            </span>
+                          )}
+                          <span className="sm:hidden">
+                            {new Date(request.createdAt).toLocaleDateString("fr-FR")}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell py-3">
+                        <div className="font-medium">{request.property.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {request.property.city}
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell py-3">
+                        <div className="font-medium">{request.tenant.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {request.tenant.email}
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3">
+                        <MaintenancePriorityBadge priority={request.priority} />
+                      </TableCell>
+                      <TableCell className="py-3">
+                        <MaintenanceStatusBadge status={request.status} />
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell py-3 text-right text-muted-foreground tabular-nums">
+                        {new Date(request.createdAt).toLocaleDateString("fr-FR")}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {requests.map((request) => (
-                      <TableRow
-                        key={request.id}
-                        className="cursor-pointer"
-                        onClick={() => router.push(`/maintenance/${request.id}`)}
-                      >
-                        <TableCell>
-                          <div className="font-medium">{request.title}</div>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            {request.category && <span>{request.category}</span>}
-                            {request.comments.length > 0 && (
-                              <span className="flex items-center gap-1">
-                                <MessageSquare className="h-3 w-3" />
-                                {request.comments.length}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-medium flex items-center gap-2">
-                            <Building2 className="h-3 w-3 text-muted-foreground" />
-                            {request.property.name}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {request.property.city}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-medium">{request.tenant.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {request.tenant.email}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <MaintenancePriorityBadge priority={request.priority} />
-                        </TableCell>
-                        <TableCell>
-                          <MaintenanceStatusBadge status={request.status} />
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {new Date(request.createdAt).toLocaleDateString("fr-FR")}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            aria-label="Voir la demande"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              router.push(`/maintenance/${request.id}`);
-                            }}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                  ))}
+                </TableBody>
+              </Table>
 
               {pagination.totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-muted-foreground">
+                <div className="mt-4 flex items-center justify-between border-t pt-4">
+                  <p className="text-sm text-muted-foreground tabular-nums">
                     Page {pagination.page} sur {pagination.totalPages}
                   </p>
                   <div className="flex gap-2">
@@ -297,6 +324,7 @@ export default function MaintenancePage() {
                       }
                       disabled={pagination.page === 1}
                     >
+                      <ChevronLeft className="h-4 w-4" aria-hidden />
                       Précédent
                     </Button>
                     <Button
@@ -308,6 +336,7 @@ export default function MaintenancePage() {
                       disabled={pagination.page === pagination.totalPages}
                     >
                       Suivant
+                      <ChevronRight className="h-4 w-4" aria-hidden />
                     </Button>
                   </div>
                 </div>

@@ -4,9 +4,17 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Loader2, PiggyBank, Plus, Trash2, Undo2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -32,7 +40,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatCurrency } from "@/lib/utils";
+import { StatusBadge } from "@/components/shared/status-badge";
+import { formatCurrency, cn } from "@/lib/utils";
 import { computeDepositBalance } from "@/lib/deposit";
 
 type DepositStatus = "NOT_RECEIVED" | "HELD" | "SETTLED";
@@ -64,18 +73,6 @@ interface DepositSummary {
   transferred: boolean;
   canManage: boolean;
 }
-
-const depositStatusLabels: Record<DepositStatus, string> = {
-  NOT_RECEIVED: "Non reçue",
-  HELD: "Détenue",
-  SETTLED: "Restituée",
-};
-
-const depositStatusColors: Record<DepositStatus, "default" | "secondary" | "outline"> = {
-  NOT_RECEIVED: "outline",
-  HELD: "default",
-  SETTLED: "secondary",
-};
 
 const paymentMethodLabels: Record<string, string> = {
   CASH: "Espèces",
@@ -122,6 +119,27 @@ function PaymentMethodSelect({
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+/** Donnée clé de la caution : libellé discret, valeur en évidence. */
+function Figure({
+  label,
+  value,
+  hint,
+  className,
+}: {
+  label: string;
+  value: React.ReactNode;
+  hint?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div>
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className={cn("font-semibold tabular-nums", className)}>{value}</dd>
+      {hint && <dd className="text-xs text-muted-foreground">{hint}</dd>}
+    </div>
   );
 }
 
@@ -315,9 +333,17 @@ export function DepositCard({ leaseId, leaseStatus }: DepositCardProps) {
 
   if (loading) {
     return (
-      <Card>
-        <CardContent className="flex justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <Card className="animate-fade-up" aria-busy="true">
+        <CardHeader>
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-4 w-64 max-w-full" />
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Skeleton className="h-12" />
+            <Skeleton className="h-12" />
+            <Skeleton className="h-12" />
+          </div>
         </CardContent>
       </Card>
     );
@@ -346,113 +372,115 @@ export function DepositCard({ leaseId, leaseStatus }: DepositCardProps) {
         )
       : null;
 
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <CardTitle className="flex items-center gap-2">
-          <PiggyBank className="h-5 w-5" />
-          Caution
-          <Badge variant={deposit.transferred ? "secondary" : depositStatusColors[status]}>
-            {deposit.transferred ? "Reportée" : depositStatusLabels[status]}
-          </Badge>
-        </CardTitle>
-        <div className="flex gap-2">
-          {canReceive && (
-            <Button variant="outline" size="sm" onClick={openReceiveDialog}>
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-              Marquer comme reçue
-            </Button>
-          )}
-          {canSettle && (
-            <Button size="sm" onClick={openSettleDialog}>
-              <Undo2 className="mr-2 h-4 w-4" />
-              Restituer la caution
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {deposit.transferred && (
-          <p className="text-sm text-muted-foreground">
-            Ce bail a été renouvelé : la caution est suivie sur le nouveau bail.
-          </p>
-        )}
+  const description = deposit.transferred
+    ? "Ce bail a été renouvelé : la caution est suivie sur le nouveau bail."
+    : status === "NOT_RECEIVED"
+      ? deposit.securityDeposit > 0
+        ? "La caution n'a pas encore été reçue."
+        : "Aucune caution n'est prévue pour ce bail."
+      : isSettled
+        ? "La caution a été restituée ; elle n'est plus modifiable."
+        : "Dépôt de garantie détenu pendant la durée du bail.";
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div>
-            <p className="text-sm text-muted-foreground">Montant prévu</p>
-            <p className="font-semibold">{formatCurrency(deposit.securityDeposit)}</p>
-          </div>
+  return (
+    <Card className="animate-fade-up" style={{ "--stagger": 5 } as React.CSSProperties}>
+      <CardHeader>
+        <CardTitle className="flex flex-wrap items-center gap-2">
+          <PiggyBank className="h-5 w-5 text-muted-foreground" aria-hidden />
+          Caution
+          {deposit.transferred ? (
+            <Badge variant="muted">Reportée</Badge>
+          ) : (
+            <StatusBadge kind="deposit" status={status} />
+          )}
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+        {(canReceive || canSettle) && (
+          <CardAction className="flex flex-wrap gap-2">
+            {canReceive && (
+              <Button variant="outline" size="sm" onClick={openReceiveDialog}>
+                <CheckCircle2 aria-hidden />
+                Marquer comme reçue
+              </Button>
+            )}
+            {canSettle && (
+              <Button size="sm" onClick={openSettleDialog}>
+                <Undo2 aria-hidden />
+                Restituer la caution
+              </Button>
+            )}
+          </CardAction>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <dl className="grid gap-4 sm:grid-cols-3">
+          <Figure label="Montant prévu" value={formatCurrency(deposit.securityDeposit)} />
           {status !== "NOT_RECEIVED" && deposit.receivedAt && (
             <>
-              <div>
-                <p className="text-sm text-muted-foreground">Reçue le</p>
-                <p className="font-semibold">
-                  {formatDay(deposit.receivedAt)}
-                  {deposit.receivedAmount !== null &&
-                    ` · ${formatCurrency(deposit.receivedAmount)}`}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Mode de paiement</p>
-                <p className="font-semibold">
-                  {deposit.paymentMethod
+              <Figure
+                label="Reçue le"
+                value={formatDay(deposit.receivedAt)}
+                hint={
+                  deposit.receivedAmount !== null && formatCurrency(deposit.receivedAmount)
+                }
+              />
+              <Figure
+                label="Mode de paiement"
+                value={
+                  deposit.paymentMethod
                     ? paymentMethodLabels[deposit.paymentMethod] ?? deposit.paymentMethod
-                    : "—"}
-                  {deposit.reference && (
-                    <span className="block text-xs font-normal text-muted-foreground">
-                      Réf. {deposit.reference}
-                    </span>
-                  )}
-                </p>
-              </div>
+                    : "—"
+                }
+                hint={deposit.reference && `Réf. ${deposit.reference}`}
+              />
             </>
           )}
-        </div>
-
-        {status === "NOT_RECEIVED" && !deposit.transferred && (
-          <p className="text-sm text-muted-foreground">
-            {deposit.securityDeposit > 0
-              ? "La caution n'a pas encore été reçue."
-              : "Aucune caution n'est prévue pour ce bail."}
-          </p>
-        )}
+        </dl>
 
         {status !== "NOT_RECEIVED" && (
           <>
             <Separator />
             <div className="space-y-3">
-              <h4 className="font-semibold">Retenues</h4>
+              <h4 className="text-sm font-semibold">Retenues</h4>
               {deposit.deductions.length > 0 ? (
-                <div className="rounded-md border">
+                <div className="overflow-hidden rounded-lg border">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>Libellé</TableHead>
-                        <TableHead className="text-right">Montant</TableHead>
-                        {canEditDeductions && <TableHead className="w-12" />}
+                      <TableRow className="bg-muted/40 hover:bg-muted/40">
+                        <TableHead className="pl-4">Libellé</TableHead>
+                        <TableHead className={cn("text-right", !canEditDeductions && "pr-4")}>
+                          Montant
+                        </TableHead>
+                        {canEditDeductions && (
+                          <TableHead className="w-14 pr-2">
+                            <span className="sr-only">Actions</span>
+                          </TableHead>
+                        )}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {deposit.deductions.map((deduction) => (
                         <TableRow key={deduction.id}>
-                          <TableCell>{deduction.label}</TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="pl-4">{deduction.label}</TableCell>
+                          <TableCell
+                            className={cn("text-right tabular-nums", !canEditDeductions && "pr-4")}
+                          >
                             {formatCurrency(deduction.amount)}
                           </TableCell>
                           {canEditDeductions && (
-                            <TableCell>
+                            <TableCell className="pr-2 text-right">
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="text-muted-foreground hover:text-destructive"
                                 aria-label={`Supprimer la retenue ${deduction.label}`}
                                 disabled={removingId === deduction.id}
                                 onClick={() => handleRemoveDeduction(deduction.id)}
                               >
                                 {removingId === deduction.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  <Loader2 className="animate-spin" aria-hidden />
                                 ) : (
-                                  <Trash2 className="h-4 w-4" />
+                                  <Trash2 />
                                 )}
                               </Button>
                             </TableCell>
@@ -469,23 +497,25 @@ export function DepositCard({ leaseId, leaseStatus }: DepositCardProps) {
               {canEditDeductions && (
                 <form
                   onSubmit={handleAddDeduction}
-                  className="grid gap-2 sm:grid-cols-[1fr_180px_auto] sm:items-end"
+                  className="grid gap-3 rounded-lg border bg-muted/30 p-4 sm:grid-cols-[1fr_180px_auto] sm:items-end"
                 >
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     <Label htmlFor="deductionLabel">Libellé</Label>
                     <Input
                       id="deductionLabel"
+                      className="bg-background"
                       value={deductionLabel}
                       onChange={(e) => setDeductionLabel(e.target.value)}
                       placeholder="Ex. Réparation porte"
                       maxLength={200}
                     />
                   </div>
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     <Label htmlFor="deductionAmount">Montant (FCFA)</Label>
                     <Input
                       id="deductionAmount"
                       type="number"
+                      className="bg-background"
                       min={1}
                       step={1}
                       value={deductionAmount}
@@ -494,9 +524,9 @@ export function DepositCard({ leaseId, leaseStatus }: DepositCardProps) {
                   </div>
                   <Button type="submit" variant="outline" disabled={isAddingDeduction}>
                     {isAddingDeduction ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="animate-spin" aria-hidden />
                     ) : (
-                      <Plus className="mr-2 h-4 w-4" />
+                      <Plus aria-hidden />
                     )}
                     Ajouter
                   </Button>
@@ -506,37 +536,29 @@ export function DepositCard({ leaseId, leaseStatus }: DepositCardProps) {
 
             <Separator />
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div>
-                <p className="text-sm text-muted-foreground">Total des retenues</p>
-                <p className="font-semibold">{formatCurrency(balance.totalDeductions)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {isSettled ? "Montant restitué" : "Montant à restituer"}
-                </p>
-                <p className="font-semibold">
-                  {formatCurrency(isSettled ? deposit.refundAmount ?? 0 : balance.refundAmount)}
-                </p>
-                {isSettled && deposit.settledAt && (
-                  <p className="text-xs text-muted-foreground">
-                    Le {formatDay(deposit.settledAt)}
-                    {deposit.refundMethod &&
-                      ` · ${paymentMethodLabels[deposit.refundMethod] ?? deposit.refundMethod}`}
-                  </p>
-                )}
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Reste dû par le locataire</p>
-                <p
-                  className={
-                    balance.remainingDue > 0 ? "font-semibold text-destructive" : "font-semibold"
-                  }
-                >
-                  {formatCurrency(balance.remainingDue)}
-                </p>
-              </div>
-            </div>
+            <dl className="grid gap-4 sm:grid-cols-3">
+              <Figure label="Total des retenues" value={formatCurrency(balance.totalDeductions)} />
+              <Figure
+                label={isSettled ? "Montant restitué" : "Montant à restituer"}
+                value={formatCurrency(isSettled ? deposit.refundAmount ?? 0 : balance.refundAmount)}
+                className={isSettled ? "text-success" : undefined}
+                hint={
+                  isSettled &&
+                  deposit.settledAt && (
+                    <>
+                      Le {formatDay(deposit.settledAt)}
+                      {deposit.refundMethod &&
+                        ` · ${paymentMethodLabels[deposit.refundMethod] ?? deposit.refundMethod}`}
+                    </>
+                  )
+                }
+              />
+              <Figure
+                label="Reste dû par le locataire"
+                value={formatCurrency(balance.remainingDue)}
+                className={balance.remainingDue > 0 ? "text-destructive" : undefined}
+              />
+            </dl>
 
             {preview && (
               <p className="text-xs text-muted-foreground">
@@ -566,7 +588,7 @@ export function DepositCard({ leaseId, leaseStatus }: DepositCardProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-1">
+            <div className="space-y-2">
               <Label htmlFor="depositAmount">Montant reçu (FCFA)</Label>
               <Input
                 id="depositAmount"
@@ -577,7 +599,7 @@ export function DepositCard({ leaseId, leaseStatus }: DepositCardProps) {
                 onChange={(e) => setReceiveAmount(e.target.value)}
               />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-2">
               <Label htmlFor="depositReceivedAt">Date de réception</Label>
               <Input
                 id="depositReceivedAt"
@@ -586,7 +608,7 @@ export function DepositCard({ leaseId, leaseStatus }: DepositCardProps) {
                 onChange={(e) => setReceivedAt(e.target.value)}
               />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-2">
               <Label htmlFor="depositMethod">Mode de paiement</Label>
               <PaymentMethodSelect
                 id="depositMethod"
@@ -594,7 +616,7 @@ export function DepositCard({ leaseId, leaseStatus }: DepositCardProps) {
                 onChange={setReceiveMethod}
               />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-2">
               <Label htmlFor="depositReference">Référence (optionnel)</Label>
               <Input
                 id="depositReference"
@@ -613,7 +635,7 @@ export function DepositCard({ leaseId, leaseStatus }: DepositCardProps) {
               Annuler
             </Button>
             <Button onClick={handleReceive} disabled={isReceiving}>
-              {isReceiving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isReceiving && <Loader2 className="animate-spin" aria-hidden />}
               Enregistrer
             </Button>
           </DialogFooter>
@@ -630,28 +652,28 @@ export function DepositCard({ leaseId, leaseStatus }: DepositCardProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-1 rounded-md border p-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Caution reçue</span>
-                <span>{formatCurrency(balance.received)}</span>
+            <dl className="space-y-1.5 rounded-lg border bg-muted/30 p-3 text-sm tabular-nums">
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Caution reçue</dt>
+                <dd>{formatCurrency(balance.received)}</dd>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Retenues</span>
-                <span>− {formatCurrency(balance.totalDeductions)}</span>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Retenues</dt>
+                <dd>− {formatCurrency(balance.totalDeductions)}</dd>
               </div>
               <Separator className="my-2" />
-              <div className="flex justify-between font-semibold">
-                <span>À restituer</span>
-                <span>{formatCurrency(balance.refundAmount)}</span>
+              <div className="flex justify-between gap-4 font-semibold">
+                <dt>À restituer</dt>
+                <dd>{formatCurrency(balance.refundAmount)}</dd>
               </div>
               {balance.remainingDue > 0 && (
-                <div className="flex justify-between font-semibold text-destructive">
-                  <span>Reste dû par le locataire</span>
-                  <span>{formatCurrency(balance.remainingDue)}</span>
+                <div className="flex justify-between gap-4 font-semibold text-destructive">
+                  <dt>Reste dû par le locataire</dt>
+                  <dd>{formatCurrency(balance.remainingDue)}</dd>
                 </div>
               )}
-            </div>
-            <div className="space-y-1">
+            </dl>
+            <div className="space-y-2">
               <Label htmlFor="depositSettledAt">Date de restitution</Label>
               <Input
                 id="depositSettledAt"
@@ -661,7 +683,7 @@ export function DepositCard({ leaseId, leaseStatus }: DepositCardProps) {
               />
             </div>
             {balance.refundAmount > 0 && (
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <Label htmlFor="refundMethod">Mode de restitution</Label>
                 <PaymentMethodSelect
                   id="refundMethod"
@@ -680,7 +702,7 @@ export function DepositCard({ leaseId, leaseStatus }: DepositCardProps) {
               Annuler
             </Button>
             <Button onClick={handleSettle} disabled={isSettling}>
-              {isSettling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isSettling && <Loader2 className="animate-spin" aria-hidden />}
               Restituer
             </Button>
           </DialogFooter>

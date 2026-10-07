@@ -3,12 +3,16 @@ import { formatCurrency } from "@/lib/utils"
 import { redirect } from "next/navigation"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import Link from "next/link"
+import { Building2, ChevronRight, FileText, Plus, Users, Wallet } from "lucide-react"
 import { StatCard } from "@/components/dashboard/stat-card"
+import { QuickActions } from "@/components/dashboard/quick-actions"
+import { formatDate, greeting } from "@/components/dashboard/format"
+import { PageHeader } from "@/components/shared/page-header"
+import { StatusBadge } from "@/components/shared/status-badge"
+import { EmptyState } from "@/components/shared/empty-state"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Building2, Users, FileText, DollarSign, Plus } from "lucide-react"
-import Link from "next/link"
 
 export default async function LandlordDashboard() {
   const session = await getServerSession(authOptions)
@@ -62,141 +66,136 @@ export default async function LandlordDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Welcome back, {session.user.name}
-          </p>
-        </div>
-        <Link href="/properties/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Property
+      <PageHeader
+        title="Tableau de bord"
+        description={`${greeting(session.user.name)}, voici l'état de votre parc locatif.`}
+        actions={
+          <Button asChild>
+            <Link href="/properties/new">
+              <Plus className="h-4 w-4" aria-hidden />
+              Ajouter un bien
+            </Link>
           </Button>
-        </Link>
-      </div>
+        }
+      />
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Properties"
+          index={0}
+          title="Biens"
           value={propertiesCount}
-          description="Total properties managed"
+          description="Biens gérés"
           icon={Building2}
+          tone="primary"
         />
         <StatCard
-          title="Active Tenants"
+          index={1}
+          title="Locataires actifs"
           value={tenantsCount}
-          description="Currently leasing"
+          description="Baux en cours"
           icon={Users}
+          tone="info"
         />
         <StatCard
-          title="Pending Payments"
+          index={2}
+          title="Paiements en attente"
           value={pendingPayments}
-          description="Awaiting payment"
-          icon={DollarSign}
+          description={pendingPayments > 0 ? "À encaisser" : "Tout est à jour"}
+          icon={Wallet}
+          tone={pendingPayments > 0 ? "warning" : "default"}
         />
         <StatCard
-          title="Monthly Revenue"
+          index={3}
+          title="Loyers mensuels"
           value={formatCurrency(totalRevenue._sum?.monthlyRent || 0)}
-          description="Expected monthly income"
+          description="Revenu mensuel attendu"
           icon={FileText}
+          tone="success"
         />
       </div>
 
-      {/* Recent Leases */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Active Leases</CardTitle>
-              <CardDescription>Your current rental agreements</CardDescription>
-            </div>
-            <Link href="/leases">
-              <Button variant="outline" size="sm">View All</Button>
-            </Link>
+      {/* Active leases */}
+      <Card className="animate-fade-up" style={{ "--stagger": 4 } as React.CSSProperties}>
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <div className="space-y-1">
+            <CardTitle>Baux actifs</CardTitle>
+            <CardDescription>Vos contrats de location en cours</CardDescription>
           </div>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/leases">Voir tout</Link>
+          </Button>
         </CardHeader>
         <CardContent>
           {activeLeases.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No active leases</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Start by adding a property and creating a lease
-              </p>
-              <Link href="/properties/new">
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Property
+            <EmptyState
+              icon={FileText}
+              title="Aucun bail actif"
+              description="Commencez par ajouter un bien, puis créez votre premier bail."
+              action={
+                <Button asChild>
+                  <Link href="/properties/new">
+                    <Plus className="h-4 w-4" aria-hidden />
+                    Ajouter un bien
+                  </Link>
                 </Button>
-              </Link>
-            </div>
+              }
+            />
           ) : (
-            <div className="space-y-4">
+            <ul className="-mx-6 divide-y border-t">
               {activeLeases.map((lease) => (
-                <div
-                  key={lease.id}
-                  className="flex items-center justify-between border-b last:border-0 pb-4 last:pb-0"
-                >
-                  <div className="space-y-1">
-                    <p className="font-medium">{lease.property.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Tenant: {lease.tenant.name}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(lease.startDate).toLocaleDateString()} -{" "}
-                      {new Date(lease.endDate).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="font-semibold">
-                        {formatCurrency(lease.monthlyRent)}/mois
+                <li key={lease.id}>
+                  <Link
+                    href={`/leases/${lease.id}`}
+                    className="flex min-h-11 cursor-pointer items-center gap-4 px-6 py-3 transition-colors hover:bg-muted/50"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{lease.property.name}</p>
+                      <p className="truncate text-sm text-muted-foreground">
+                        {lease.tenant.name} · {formatDate(lease.startDate)} – {formatDate(lease.endDate)}
                       </p>
-                      <Badge variant="secondary">{lease.status}</Badge>
                     </div>
-                    <Link href={`/leases/${lease.id}`}>
-                      <Button variant="outline" size="sm">View</Button>
-                    </Link>
-                  </div>
-                </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <div className="text-right">
+                        <p className="font-semibold tabular-nums">
+                          {formatCurrency(lease.monthlyRent)}
+                          <span className="text-xs font-normal text-muted-foreground"> / mois</span>
+                        </p>
+                        <StatusBadge kind="lease" status={lease.status} className="mt-1" />
+                      </div>
+                      <ChevronRight className="hidden h-4 w-4 text-muted-foreground sm:block" aria-hidden />
+                    </div>
+                  </Link>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </CardContent>
       </Card>
 
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Common tasks and shortcuts</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
-            <Link href="/properties/new">
-              <Button variant="outline" className="w-full justify-start h-auto py-4">
-                <Building2 className="mr-2 h-4 w-4" />
-                Add New Property
-              </Button>
-            </Link>
-            <Link href="/leases/new">
-              <Button variant="outline" className="w-full justify-start h-auto py-4">
-                <FileText className="mr-2 h-4 w-4" />
-                Create Lease
-              </Button>
-            </Link>
-            <Link href="/payments">
-              <Button variant="outline" className="w-full justify-start h-auto py-4">
-                <DollarSign className="mr-2 h-4 w-4" />
-                Record Payment
-              </Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+      <QuickActions
+        index={5}
+        actions={[
+          {
+            href: "/properties/new",
+            icon: Building2,
+            title: "Ajouter un bien",
+            description: "Nouveau logement ou local",
+          },
+          {
+            href: "/leases/new",
+            icon: FileText,
+            title: "Créer un bail",
+            description: "Associer un locataire à un bien",
+          },
+          {
+            href: "/payments",
+            icon: Wallet,
+            title: "Enregistrer un paiement",
+            description: "Loyer reçu ou en retard",
+          },
+        ]}
+      />
     </div>
   )
 }

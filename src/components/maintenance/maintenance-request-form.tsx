@@ -7,9 +7,16 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -32,7 +39,7 @@ import {
   isStaffRole,
   maintenancePriorityLabels,
 } from "@/lib/maintenance";
-import { Building2, Loader2, Wrench } from "lucide-react";
+import { Building2, FileText, Loader2, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 
 // Valeurs sentinelles (Radix Select n'accepte pas de valeur vide)
@@ -60,6 +67,16 @@ interface PropertyOption {
   address: string;
   city: string;
   leases: Array<{ tenant: { id: string; name: string; email: string } }>;
+}
+
+function FormSkeleton() {
+  return (
+    <div className="animate-fade-in space-y-6" aria-busy="true" aria-live="polite">
+      <Skeleton className="h-40 rounded-xl" />
+      <Skeleton className="h-72 rounded-xl" />
+      <Skeleton className="h-40 rounded-xl" />
+    </div>
+  );
 }
 
 export function MaintenanceRequestForm() {
@@ -139,24 +156,25 @@ export function MaintenanceRequestForm() {
   };
 
   if (loadingProperties) {
-    return (
-      <div className="flex items-center justify-center min-h-[300px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <FormSkeleton />;
   }
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <Card>
+        <Card className="animate-fade-up" style={{ "--stagger": 1 } as React.CSSProperties}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
+              <Building2 className="h-4 w-4 text-muted-foreground" aria-hidden />
               Bien concerné
             </CardTitle>
+            <CardDescription>
+              {isStaff
+                ? "Le bien et, le cas échéant, le locataire pour qui vous ouvrez la demande."
+                : "Le logement concerné par le problème."}
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className={isStaff ? "grid gap-4 md:grid-cols-2" : "space-y-4"}>
             <FormField
               control={form.control}
               name="propertyId"
@@ -171,7 +189,7 @@ export function MaintenanceRequestForm() {
                     value={field.value}
                   >
                     <FormControl>
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="Sélectionner une propriété" />
                       </SelectTrigger>
                     </FormControl>
@@ -209,7 +227,7 @@ export function MaintenanceRequestForm() {
                       disabled={!selectedProperty}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
@@ -234,12 +252,15 @@ export function MaintenanceRequestForm() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="animate-fade-up" style={{ "--stagger": 2 } as React.CSSProperties}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Wrench className="h-5 w-5" />
+              <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />
               Description du problème
             </CardTitle>
+            <CardDescription>
+              Un titre court et une description précise accélèrent la prise en charge.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <FormField
@@ -273,63 +294,78 @@ export function MaintenanceRequestForm() {
                 </FormItem>
               )}
             />
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="priority"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Priorité</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {MAINTENANCE_PRIORITIES.map((p) => (
-                          <SelectItem key={p} value={p}>
-                            {maintenancePriorityLabels[p]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="category"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Catégorie</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value={NO_CATEGORY}>Non précisée</SelectItem>
-                        {MAINTENANCE_CATEGORIES.map((c) => (
-                          <SelectItem key={c} value={c}>
-                            {c}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
           </CardContent>
         </Card>
 
-        <div className="flex gap-4">
+        <Card className="animate-fade-up" style={{ "--stagger": 3 } as React.CSSProperties}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <SlidersHorizontal className="h-4 w-4 text-muted-foreground" aria-hidden />
+              Priorité et catégorie
+            </CardTitle>
+            <CardDescription>
+              Réservez la priorité « Urgente » aux situations à risque (fuite importante,
+              panne électrique, serrure bloquée).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="priority"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Priorité</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {MAINTENANCE_PRIORITIES.map((p) => (
+                        <SelectItem key={p} value={p}>
+                          {maintenancePriorityLabels[p]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="category"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Catégorie</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={NO_CATEGORY}>Non précisée</SelectItem>
+                      {MAINTENANCE_CATEGORIES.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+
+        <div
+          className="animate-fade-up flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"
+          style={{ "--stagger": 4 } as React.CSSProperties}
+        >
           <Button
             type="button"
             variant="outline"
@@ -339,7 +375,7 @@ export function MaintenanceRequestForm() {
             Annuler
           </Button>
           <Button type="submit" disabled={isSubmitting || properties.length === 0}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
             Créer la demande
           </Button>
         </div>

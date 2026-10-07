@@ -3,12 +3,16 @@ import { formatCurrency } from "@/lib/utils"
 import { redirect } from "next/navigation"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import Link from "next/link"
+import { FileText, Home, MessageSquare, Plus, Wallet, Wrench } from "lucide-react"
 import { StatCard } from "@/components/dashboard/stat-card"
+import { QuickActions } from "@/components/dashboard/quick-actions"
+import { formatDate, greeting } from "@/components/dashboard/format"
+import { PageHeader } from "@/components/shared/page-header"
+import { StatusBadge } from "@/components/shared/status-badge"
+import { EmptyState } from "@/components/shared/empty-state"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Home, FileText, DollarSign, Wrench, Plus } from "lucide-react"
-import Link from "next/link"
 
 export default async function TenantDashboard() {
   const session = await getServerSession(authOptions)
@@ -65,188 +69,183 @@ export default async function TenantDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Welcome back, {session.user.name}
-          </p>
-        </div>
-        <Link href="/maintenance/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            New Request
+      <PageHeader
+        title="Tableau de bord"
+        description={`${greeting(session.user.name)}, voici un résumé de votre location.`}
+        actions={
+          <Button asChild>
+            <Link href="/maintenance/new">
+              <Plus className="h-4 w-4" aria-hidden />
+              Nouvelle demande
+            </Link>
           </Button>
-        </Link>
-      </div>
+        }
+      />
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Active Lease"
-          value={activeLease ? "Yes" : "No"}
-          description={activeLease ? activeLease.property.name : "No active lease"}
+          index={0}
+          title="Bail actif"
+          value={activeLease ? "Oui" : "Non"}
+          description={activeLease ? activeLease.property.name : "Aucun bail en cours"}
           icon={Home}
+          tone={activeLease ? "success" : "default"}
         />
         <StatCard
-          title="Paid Payments"
+          index={1}
+          title="Paiements effectués"
           value={paidPayments}
-          description="Total payments made"
-          icon={DollarSign}
+          description="Loyers réglés"
+          icon={Wallet}
+          tone="success"
         />
         <StatCard
-          title="Pending Payments"
+          index={2}
+          title="Paiements en attente"
           value={pendingPayments}
-          description="Awaiting payment"
+          description={pendingPayments > 0 ? "À régler" : "Vous êtes à jour"}
           icon={FileText}
+          tone={pendingPayments > 0 ? "warning" : "default"}
         />
         <StatCard
-          title="Open Requests"
+          index={3}
+          title="Demandes ouvertes"
           value={maintenanceRequests}
-          description="Maintenance requests"
+          description="Interventions en cours"
           icon={Wrench}
+          tone={maintenanceRequests > 0 ? "info" : "default"}
         />
       </div>
 
-      {/* Current Lease */}
-      {activeLease && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Current Lease</CardTitle>
-            <CardDescription>Your active rental agreement</CardDescription>
+      {/* Current lease */}
+      {activeLease ? (
+        <Card className="animate-fade-up" style={{ "--stagger": 4 } as React.CSSProperties}>
+          <CardHeader className="flex flex-row items-start justify-between gap-4">
+            <div className="space-y-1">
+              <CardTitle>Mon bail</CardTitle>
+              <CardDescription>Votre contrat de location en cours</CardDescription>
+            </div>
+            <StatusBadge kind="lease" status={activeLease.status} />
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Property</p>
-                  <p className="text-lg font-semibold">{activeLease.property.name}</p>
-                  <p className="text-sm text-muted-foreground">{activeLease.property.address}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Landlord</p>
-                  <p className="text-lg font-semibold">{activeLease.property.owner.name}</p>
-                  <p className="text-sm text-muted-foreground">{activeLease.property.owner.email}</p>
-                </div>
+          <CardContent className="space-y-6">
+            <dl className="grid gap-6 sm:grid-cols-2">
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Logement</dt>
+                <dd className="mt-1 text-base font-semibold">{activeLease.property.name}</dd>
+                <dd className="text-sm text-muted-foreground">{activeLease.property.address}</dd>
               </div>
-              <div className="grid gap-4 md:grid-cols-3 border-t pt-4">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Monthly Rent</p>
-                  <p className="text-2xl font-bold">{formatCurrency(activeLease.monthlyRent)}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Lease Period</p>
-                  <p className="text-sm">
-                    {new Date(activeLease.startDate).toLocaleDateString()} -{" "}
-                    {new Date(activeLease.endDate).toLocaleDateString()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Status</p>
-                  <Badge variant="secondary">{activeLease.status}</Badge>
-                </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Propriétaire</dt>
+                <dd className="mt-1 text-base font-semibold">{activeLease.property.owner.name}</dd>
+                <dd className="truncate text-sm text-muted-foreground">
+                  {activeLease.property.owner.email}
+                </dd>
               </div>
-              <div className="flex gap-4 pt-4">
+            </dl>
+            <dl className="grid gap-6 border-t pt-6 sm:grid-cols-2">
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Loyer mensuel</dt>
+                <dd className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">
+                  {formatCurrency(activeLease.monthlyRent)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Période</dt>
+                <dd className="mt-1 text-base">
+                  Du {formatDate(activeLease.startDate)} au {formatDate(activeLease.endDate)}
+                </dd>
+              </div>
+            </dl>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button variant="outline" asChild>
                 <Link href={`/leases/${activeLease.id}`}>
-                  <Button variant="outline">View Details</Button>
+                  <FileText className="h-4 w-4" aria-hidden />
+                  Voir le bail
                 </Link>
+              </Button>
+              <Button variant="outline" asChild>
                 <Link href={`/messages/new?to=${activeLease.property.ownerId}`}>
-                  <Button variant="outline">Contact Landlord</Button>
+                  <MessageSquare className="h-4 w-4" aria-hidden />
+                  Contacter le propriétaire
                 </Link>
-              </div>
+              </Button>
             </div>
           </CardContent>
         </Card>
+      ) : (
+        <EmptyState
+          icon={Home}
+          title="Aucun bail actif"
+          description="Vous n'avez pas de contrat de location en cours pour le moment."
+          className="animate-fade-up bg-card"
+        />
       )}
 
-      {!activeLease && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <Home className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No Active Lease</h3>
-            <p className="text-sm text-muted-foreground">
-              You don&apos;t have an active lease at the moment
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Recent Payments */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Recent Payments</CardTitle>
-              <CardDescription>Your payment history</CardDescription>
-            </div>
-            <Link href="/payments">
-              <Button variant="outline" size="sm">View All</Button>
-            </Link>
+      {/* Recent payments */}
+      <Card className="animate-fade-up" style={{ "--stagger": 5 } as React.CSSProperties}>
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <div className="space-y-1">
+            <CardTitle>Derniers paiements</CardTitle>
+            <CardDescription>Vos cinq dernières échéances</CardDescription>
           </div>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/payments">Voir tout</Link>
+          </Button>
         </CardHeader>
         <CardContent>
           {payments.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <DollarSign className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-sm text-muted-foreground">No payments yet</p>
-            </div>
+            <EmptyState
+              icon={Wallet}
+              title="Aucun paiement"
+              description="Vos loyers apparaîtront ici dès la première échéance."
+              className="py-10"
+            />
           ) : (
-            <div className="space-y-4">
+            <ul className="-mx-6 divide-y border-t">
               {payments.map((payment) => (
-                <div
+                <li
                   key={payment.id}
-                  className="flex items-center justify-between border-b last:border-0 pb-4 last:pb-0"
+                  className="flex min-h-11 items-center justify-between gap-4 px-6 py-3"
                 >
-                  <div className="space-y-1">
-                    <p className="font-medium">{formatCurrency(payment.amount)}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Due: {new Date(payment.dueDate).toLocaleDateString()}
+                  <div className="min-w-0">
+                    <p className="font-semibold tabular-nums">{formatCurrency(payment.amount)}</p>
+                    <p className="truncate text-sm text-muted-foreground">
+                      Échéance le {formatDate(payment.dueDate)}
+                      {payment.paidDate && ` · payé le ${formatDate(payment.paidDate)}`}
                     </p>
-                    {payment.paidDate && (
-                      <p className="text-sm text-muted-foreground">
-                        Paid: {new Date(payment.paidDate).toLocaleDateString()}
-                      </p>
-                    )}
                   </div>
-                  <Badge variant={payment.status === "PAID" ? "default" : "secondary"}>
-                    {payment.status}
-                  </Badge>
-                </div>
+                  <StatusBadge kind="payment" status={payment.status} />
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </CardContent>
       </Card>
 
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Common tasks and shortcuts</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
-            <Link href="/payments">
-              <Button variant="outline" className="w-full justify-start h-auto py-4">
-                <DollarSign className="mr-2 h-4 w-4" />
-                Make Payment
-              </Button>
-            </Link>
-            <Link href="/maintenance/new">
-              <Button variant="outline" className="w-full justify-start h-auto py-4">
-                <Wrench className="mr-2 h-4 w-4" />
-                Request Maintenance
-              </Button>
-            </Link>
-            <Link href="/documents">
-              <Button variant="outline" className="w-full justify-start h-auto py-4">
-                <FileText className="mr-2 h-4 w-4" />
-                View Documents
-              </Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+      <QuickActions
+        index={6}
+        actions={[
+          {
+            href: "/payments",
+            icon: Wallet,
+            title: "Payer mon loyer",
+            description: "Voir mes échéances",
+          },
+          {
+            href: "/maintenance/new",
+            icon: Wrench,
+            title: "Demander une intervention",
+            description: "Signaler un problème",
+          },
+          {
+            href: "/documents",
+            icon: FileText,
+            title: "Mes documents",
+            description: "Bail, quittances, état des lieux",
+          },
+        ]}
+      />
     </div>
   )
 }

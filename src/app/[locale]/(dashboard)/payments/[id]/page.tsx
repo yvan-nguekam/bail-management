@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -16,17 +15,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  ArrowLeft,
   Trash2,
-  CreditCard,
-  Calendar,
-  DollarSign,
   User,
   Building2,
   Loader2,
-  CheckCircle,
+  CheckCircle2,
   AlertCircle,
   Download,
+  FileText,
+  Mail,
+  Phone,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -47,6 +46,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { PageHeader } from "@/components/shared/page-header";
+import { StatusBadge } from "@/components/shared/status-badge";
+import { PaymentDetailsSkeleton } from "@/components/payments/payment-details-skeleton";
+import {
+  PAYMENT_METHOD_LABELS,
+  formatDate,
+  getDaysOverdue,
+  overdueLabel,
+  paymentMethodLabel,
+} from "@/components/payments/payment-helpers";
+import { formatCurrency, cn } from "@/lib/utils";
 
 interface Payment {
   id: string;
@@ -80,27 +90,24 @@ interface Payment {
   };
 }
 
-const statusLabels: Record<string, string> = {
-  PENDING: "En attente",
-  PAID: "Payé",
-  OVERDUE: "En retard",
-  CANCELLED: "Annulé",
-};
-
-const statusColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  PENDING: "outline",
-  PAID: "default",
-  OVERDUE: "destructive",
-  CANCELLED: "secondary",
-};
-
-const paymentMethodLabels: Record<string, string> = {
-  CASH: "Espèces",
-  BANK_TRANSFER: "Virement bancaire",
-  CREDIT_CARD: "Carte de crédit",
-  CHECK: "Chèque",
-  MOBILE_MONEY: "Mobile Money",
-};
+function DetailItem({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("space-y-1", className)}>
+      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="text-sm font-medium">{children}</dd>
+    </div>
+  );
+}
 
 export default function PaymentDetailsPage() {
   const params = useParams<{ id: string }>();
@@ -199,215 +206,233 @@ export default function PaymentDetailsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PaymentDetailsSkeleton />;
   }
 
   if (!payment) {
     return null;
   }
 
-  const daysOverdue = Math.ceil(
-    (new Date().getTime() - new Date(payment.dueDate).getTime()) / (1000 * 60 * 60 * 24)
-  );
+  const daysOverdue = getDaysOverdue(payment.dueDate);
   const isOverdue = payment.status !== "PAID" && daysOverdue > 0;
+  const isPaid = payment.status === "PAID";
+  const method = paymentMethodLabel(payment.paymentMethod);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold">Détails du paiement</h1>
+      <PageHeader
+        title="Détails du paiement"
+        description={`${payment.lease.property.name} · ${payment.lease.tenant.name}`}
+        backHref="/payments"
+        actions={
+          <>
+            {!isPaid && (
+              <Button onClick={() => setMarkPaidDialogOpen(true)}>
+                <CheckCircle2 className="h-4 w-4" aria-hidden />
+                Marquer comme payé
+              </Button>
+            )}
+            {isPaid && (
+              <Button variant="outline">
+                <Download className="h-4 w-4" aria-hidden />
+                Télécharger le reçu
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden />
+              Supprimer
+            </Button>
+          </>
+        }
+      >
+        <StatusBadge kind="payment" status={payment.status} />
+        {isOverdue && (
+          <span className="text-xs font-medium text-destructive">
+            {overdueLabel(daysOverdue)}
+          </span>
+        )}
+      </PageHeader>
+
+      {isOverdue && (
+        <div
+          role="alert"
+          className="animate-fade-up flex items-start gap-3 rounded-xl border border-destructive/25 bg-destructive/5 px-4 py-3"
+          style={{ "--stagger": 1 } as React.CSSProperties}
+        >
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" aria-hidden />
+          <div className="text-sm">
+            <p className="font-medium text-destructive">
+              Ce paiement est en retard de {daysOverdue} jour{daysOverdue > 1 ? "s" : ""}.
+            </p>
             <p className="text-muted-foreground">
-              {payment.lease.property.name}
+              Échéance au {formatDate(payment.dueDate)}. Marquez-le comme payé dès réception.
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
-          {payment.status !== "PAID" && (
-            <Button onClick={() => setMarkPaidDialogOpen(true)}>
-              <CheckCircle className="mr-2 h-4 w-4" />
-              Marquer comme payé
-            </Button>
-          )}
-          {payment.status === "PAID" && (
-            <Button variant="outline">
-              <Download className="mr-2 h-4 w-4" />
-              Télécharger reçu
-            </Button>
-          )}
-          <Button
-            variant="destructive"
-            onClick={() => setDeleteDialogOpen(true)}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Supprimer
-          </Button>
-        </div>
-      </div>
-
-      {isOverdue && (
-        <Card className="border-red-500 bg-red-50 dark:bg-red-950/20">
-          <CardContent className="flex items-center gap-3 pt-6">
-            <AlertCircle className="h-5 w-5 text-red-600" />
-            <p className="text-sm font-medium text-red-900 dark:text-red-100">
-              Ce paiement est en retard de {daysOverdue} jour{daysOverdue > 1 ? "s" : ""}.
-            </p>
-          </CardContent>
-        </Card>
       )}
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3">
         {/* Informations principales */}
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" />
-              Informations du paiement
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center gap-2">
-              <Badge variant={statusColors[payment.status]}>
-                {statusLabels[payment.status]}
-              </Badge>
-            </div>
-
-            <Separator />
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-500/10 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Montant</p>
-                  <p className="text-2xl font-bold">
-                    {payment.amount.toLocaleString()} FCFA
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <Calendar className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    Date d'échéance
-                  </p>
-                  <p className="font-semibold">
-                    {new Date(payment.dueDate).toLocaleDateString("fr-FR", { timeZone: "UTC" })}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {payment.periodStart && payment.periodEnd && (
+        <div className="space-y-6 lg:col-span-2">
+          <Card className="animate-fade-up" style={{ "--stagger": 2 } as React.CSSProperties}>
+            <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Période couverte</p>
-                <p className="font-medium">
-                  Du {new Date(payment.periodStart).toLocaleDateString("fr-FR", { timeZone: "UTC" })} au{" "}
-                  {new Date(payment.periodEnd).toLocaleDateString("fr-FR", { timeZone: "UTC" })}
+                <p className="text-sm font-medium text-muted-foreground">Montant</p>
+                <p
+                  className={cn(
+                    "mt-1 text-4xl font-semibold tabular-nums tracking-tight",
+                    isOverdue && "text-destructive"
+                  )}
+                >
+                  {formatCurrency(payment.amount)}
                 </p>
               </div>
-            )}
-
-            {payment.status === "PAID" && (
-              <>
-                <Separator />
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Date de paiement
-                    </p>
-                    <p className="font-medium">
-                      {payment.paidDate
-                        ? new Date(payment.paidDate).toLocaleDateString("fr-FR")
-                        : "-"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Méthode de paiement
-                    </p>
-                    <p className="font-medium">
-                      {payment.paymentMethod
-                        ? paymentMethodLabels[payment.paymentMethod]
-                        : "-"}
-                    </p>
-                  </div>
-                </div>
-
-                {payment.transactionId && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      ID de transaction
-                    </p>
-                    <p className="font-mono text-sm">{payment.transactionId}</p>
-                  </div>
-                )}
-              </>
-            )}
-
-            {payment.notes && (
-              <>
-                <Separator />
-                <div>
-                  <h4 className="font-semibold mb-2">Notes</h4>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                    {payment.notes}
+              <div className="text-sm sm:text-right">
+                <p className="text-muted-foreground">Échéance</p>
+                <p className="font-medium tabular-nums">{formatDate(payment.dueDate)}</p>
+                {isPaid && payment.paidDate && (
+                  <p className="mt-1 text-xs text-success">
+                    Réglé le {formatDate(payment.paidDate)}
                   </p>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Propriété */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Building2 className="h-4 w-4" />
-                Propriété
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <p className="font-semibold">{payment.lease.property.name}</p>
-              <p className="text-sm text-muted-foreground">
-                {payment.lease.property.address}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {payment.lease.property.city}
-              </p>
+                )}
+              </div>
             </CardContent>
           </Card>
 
-          {/* Locataire */}
-          <Card>
+          <Card className="animate-fade-up" style={{ "--stagger": 3 } as React.CSSProperties}>
+            <CardHeader>
+              <CardTitle>Informations</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid gap-5 sm:grid-cols-2">
+                <DetailItem label="Date d'échéance">
+                  <span className="tabular-nums">{formatDate(payment.dueDate)}</span>
+                </DetailItem>
+                <DetailItem label="Période couverte">
+                  {payment.periodStart && payment.periodEnd ? (
+                    <span className="tabular-nums">
+                      Du {formatDate(payment.periodStart)} au {formatDate(payment.periodEnd)}
+                    </span>
+                  ) : (
+                    <span className="font-normal text-muted-foreground">—</span>
+                  )}
+                </DetailItem>
+                {isPaid && (
+                  <DetailItem label="Date de paiement">
+                    {payment.paidDate ? (
+                      <span className="tabular-nums">{formatDate(payment.paidDate)}</span>
+                    ) : (
+                      <span className="font-normal text-muted-foreground">—</span>
+                    )}
+                  </DetailItem>
+                )}
+                <DetailItem label="Méthode de paiement">
+                  {method ?? <span className="font-normal text-muted-foreground">—</span>}
+                </DetailItem>
+                <DetailItem label="Référence de transaction">
+                  {payment.transactionId ? (
+                    <span className="font-mono text-sm">{payment.transactionId}</span>
+                  ) : (
+                    <span className="font-normal text-muted-foreground">—</span>
+                  )}
+                </DetailItem>
+                <DetailItem label="Notes" className="sm:col-span-2">
+                  {payment.notes ? (
+                    <span className="whitespace-pre-wrap font-normal">{payment.notes}</span>
+                  ) : (
+                    <span className="font-normal text-muted-foreground">Aucune note</span>
+                  )}
+                </DetailItem>
+              </dl>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Cartes latérales */}
+        <div className="space-y-6">
+          <Card className="animate-fade-up" style={{ "--stagger": 4 } as React.CSSProperties}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <User className="h-4 w-4" />
+                <Building2 className="h-4 w-4 text-muted-foreground" aria-hidden />
+                Bien
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="font-medium">{payment.lease.property.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {payment.lease.property.address}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {payment.lease.property.city}
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" className="-ml-2.5 h-9" asChild>
+                <Link href={`/properties/${payment.lease.property.id}`}>
+                  Voir le bien
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="animate-fade-up" style={{ "--stagger": 5 } as React.CSSProperties}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <User className="h-4 w-4 text-muted-foreground" aria-hidden />
                 Locataire
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <p className="font-semibold">{payment.lease.tenant.name}</p>
+            <CardContent className="space-y-3">
+              <div className="space-y-1">
+                <p className="font-medium">{payment.lease.tenant.name}</p>
+                <a
+                  href={`mailto:${payment.lease.tenant.email}`}
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  <Mail className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span className="truncate">{payment.lease.tenant.email}</span>
+                </a>
+                {payment.lease.tenant.phone && (
+                  <a
+                    href={`tel:${payment.lease.tenant.phone}`}
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:underline"
+                  >
+                    <Phone className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    {payment.lease.tenant.phone}
+                  </a>
+                )}
+              </div>
+              <Button variant="ghost" size="sm" className="-ml-2.5 h-9" asChild>
+                <Link href={`/tenants/${payment.lease.tenant.id}`}>
+                  Voir le locataire
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="animate-fade-up" style={{ "--stagger": 6 } as React.CSSProperties}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />
+                Bail
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                {payment.lease.tenant.email}
+                Propriétaire : {payment.lease.property.owner.name}
               </p>
-              {payment.lease.tenant.phone && (
-                <p className="text-sm text-muted-foreground">
-                  {payment.lease.tenant.phone}
-                </p>
-              )}
+              <Button variant="ghost" size="sm" className="-ml-2.5 h-9" asChild>
+                <Link href={`/leases/${payment.lease.id}`}>
+                  Voir le bail
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -447,22 +472,22 @@ export default function PaymentDetailsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="paymentMethod">Méthode de paiement</Label>
               <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                <SelectTrigger id="paymentMethod">
+                <SelectTrigger id="paymentMethod" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="CASH">Espèces</SelectItem>
-                  <SelectItem value="BANK_TRANSFER">Virement bancaire</SelectItem>
-                  <SelectItem value="CREDIT_CARD">Carte de crédit</SelectItem>
-                  <SelectItem value="CHECK">Chèque</SelectItem>
-                  <SelectItem value="MOBILE_MONEY">Mobile Money</SelectItem>
+                  {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="paidDate">Date de paiement</Label>
               <Input
                 id="paidDate"
@@ -471,7 +496,7 @@ export default function PaymentDetailsPage() {
                 onChange={(e) => setPaidDate(e.target.value)}
               />
             </div>
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="transactionId">ID de transaction (optionnel)</Label>
               <Input
                 id="transactionId"

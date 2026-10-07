@@ -6,7 +6,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -25,8 +31,12 @@ import {
   FormMessage,
   FormDescription,
 } from "@/components/ui/form";
-import { ArrowLeft, Loader2, CreditCard, FileText } from "lucide-react";
+import { Loader2, Building2, User, Banknote } from "lucide-react";
 import { toast } from "sonner";
+import { PageHeader } from "@/components/shared/page-header";
+import { PageSkeleton } from "@/components/shared/page-skeleton";
+import { formatCurrency } from "@/lib/utils";
+import { PAYMENT_METHOD_LABELS } from "@/components/payments/payment-helpers";
 
 const paymentSchema = z.object({
   leaseId: z.string().min(1, "Le bail est requis"),
@@ -133,37 +143,30 @@ export default function NewPaymentPage() {
     }
   };
 
+  const selectedLeaseId = form.watch("leaseId");
+  const selectedLease = leases.find((l) => l.id === selectedLeaseId);
+
   if (loadingData) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton stats={0} />;
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-3xl font-bold">Enregistrer un paiement</h1>
-          <p className="text-muted-foreground">
-            Créez un nouveau paiement de loyer
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Nouveau paiement"
+        description="Enregistrez une échéance de loyer pour un bail actif"
+        backHref="/payments"
+      />
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="max-w-3xl space-y-6">
           {/* Sélection du bail */}
-          <Card>
+          <Card className="animate-fade-up" style={{ "--stagger": 1 } as React.CSSProperties}>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Informations du bail
-              </CardTitle>
+              <CardTitle>Bail concerné</CardTitle>
+              <CardDescription>
+                Le montant est pré-rempli avec le loyer mensuel du bail choisi.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <FormField
@@ -180,7 +183,7 @@ export default function NewPaymentPage() {
                       value={field.value}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder="Sélectionner un bail actif" />
                         </SelectTrigger>
                       </FormControl>
@@ -192,15 +195,10 @@ export default function NewPaymentPage() {
                         ) : (
                           leases.map((lease) => (
                             <SelectItem key={lease.id} value={lease.id}>
-                              <div>
-                                <div className="font-medium">
-                                  {lease.property.name}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {lease.tenant.name} -{" "}
-                                  {lease.monthlyRent.toLocaleString()} FCFA/mois
-                                </div>
-                              </div>
+                              <span className="font-medium">{lease.property.name}</span>
+                              <span className="text-muted-foreground">
+                                · {lease.tenant.name} · {formatCurrency(lease.monthlyRent)}/mois
+                              </span>
                             </SelectItem>
                           ))
                         )}
@@ -213,16 +211,54 @@ export default function NewPaymentPage() {
                   </FormItem>
                 )}
               />
+
+              {selectedLease && (
+                <div className="animate-fade-in grid gap-4 rounded-lg border bg-muted/40 p-4 sm:grid-cols-3">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <Building2 className="h-4 w-4" aria-hidden />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">Bien</p>
+                      <p className="truncate text-sm font-medium">{selectedLease.property.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {selectedLease.property.city}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <User className="h-4 w-4" aria-hidden />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">Locataire</p>
+                      <p className="truncate text-sm font-medium">{selectedLease.tenant.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {selectedLease.tenant.email}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <Banknote className="h-4 w-4" aria-hidden />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">Loyer mensuel</p>
+                      <p className="text-sm font-medium tabular-nums">
+                        {formatCurrency(selectedLease.monthlyRent)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           {/* Informations du paiement */}
-          <Card>
+          <Card className="animate-fade-up" style={{ "--stagger": 2 } as React.CSSProperties}>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />
-                Détails du paiement
-              </CardTitle>
+              <CardTitle>Détails du paiement</CardTitle>
+              <CardDescription>Montant, échéance et informations complémentaires.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
@@ -233,7 +269,14 @@ export default function NewPaymentPage() {
                     <FormItem>
                       <FormLabel>Montant (FCFA)</FormLabel>
                       <FormControl>
-                        <Input type="number" min="0" step="0.01" {...field} value={field.value as number} />
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="tabular-nums"
+                          {...field}
+                          value={field.value as number}
+                        />
                       </FormControl>
                       <FormDescription>
                         Rempli automatiquement depuis le bail
@@ -248,7 +291,7 @@ export default function NewPaymentPage() {
                   name="dueDate"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Date d'échéance</FormLabel>
+                      <FormLabel>Date d&apos;échéance</FormLabel>
                       <FormControl>
                         <Input type="date" {...field} />
                       </FormControl>
@@ -269,16 +312,16 @@ export default function NewPaymentPage() {
                       value={field.value}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder="Sélectionner une méthode" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="CASH">Espèces</SelectItem>
-                        <SelectItem value="BANK_TRANSFER">Virement bancaire</SelectItem>
-                        <SelectItem value="CREDIT_CARD">Carte de crédit</SelectItem>
-                        <SelectItem value="CHECK">Chèque</SelectItem>
-                        <SelectItem value="MOBILE_MONEY">Mobile Money</SelectItem>
+                        {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormDescription>
@@ -309,7 +352,10 @@ export default function NewPaymentPage() {
             </CardContent>
           </Card>
 
-          <div className="flex gap-4">
+          <div
+            className="animate-fade-up flex flex-col-reverse gap-3 border-t pt-6 sm:flex-row sm:justify-end"
+            style={{ "--stagger": 3 } as React.CSSProperties}
+          >
             <Button
               type="button"
               variant="outline"
@@ -320,7 +366,7 @@ export default function NewPaymentPage() {
             </Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
               )}
               Enregistrer le paiement
             </Button>

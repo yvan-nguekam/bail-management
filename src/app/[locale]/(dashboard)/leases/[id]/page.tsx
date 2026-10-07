@@ -1,22 +1,37 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  ArrowLeft,
-  Edit,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Pencil,
   Trash2,
-  FileText,
-  Calendar,
-  DollarSign,
+  CalendarDays,
+  CalendarCheck,
+  Wallet,
+  ShieldCheck,
   User,
   Building2,
   Loader2,
@@ -25,10 +40,19 @@ import {
   AlertCircle,
   CalendarClock,
   Download,
+  MoreHorizontal,
+  Mail,
+  Phone,
+  ArrowUpRight,
 } from "lucide-react";
 import { PaymentScheduleTable } from "@/components/leases/payment-schedule-table";
 import { DepositCard } from "@/components/leases/deposit-card";
-import { formatCurrency } from "@/lib/utils";
+import { PageHeader } from "@/components/shared/page-header";
+import { PageSkeleton } from "@/components/shared/page-skeleton";
+import { StatusBadge } from "@/components/shared/status-badge";
+import { InfoItem } from "@/components/properties/info-item";
+import { formatDay, propertyTypeLabel } from "@/components/properties/property-labels";
+import { formatCurrency, cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -84,22 +108,6 @@ interface Lease {
     status: string;
   }>;
 }
-
-const statusLabels: Record<string, string> = {
-  DRAFT: "Brouillon",
-  ACTIVE: "Actif",
-  EXPIRED: "Expiré",
-  TERMINATED: "Résilié",
-  RENEWED: "Renouvelé",
-};
-
-const statusColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  DRAFT: "outline",
-  ACTIVE: "default",
-  EXPIRED: "destructive",
-  TERMINATED: "secondary",
-  RENEWED: "secondary",
-};
 
 export default function LeaseDetailsPage() {
   const params = useParams<{ id: string }>();
@@ -290,11 +298,7 @@ export default function LeaseDetailsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton stats={0} />;
   }
 
   if (!lease) {
@@ -306,8 +310,10 @@ export default function LeaseDetailsPage() {
   );
   const isExpiringSoon = lease.status === "ACTIVE" && daysUntilExpiry > 0 && daysUntilExpiry <= 30;
 
-  const canManageSchedule =
-    !!session?.user && session.user.role !== "TENANT" && lease.status !== "RENEWED";
+  // Les actions de gestion sont réservées au personnel (l'API les bloque pour les locataires)
+  const isStaff = !!session?.user && session.user.role !== "TENANT";
+  const canManageSchedule = isStaff && lease.status !== "RENEWED";
+  const canRenewOrTerminate = isStaff && lease.status === "ACTIVE";
   const billedPayments = lease.payments.filter((p) => p.status !== "CANCELLED");
   const totalPaid = billedPayments
     .filter((p) => p.status === "PAID")
@@ -318,144 +324,144 @@ export default function LeaseDetailsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold">Détails du bail</h1>
-            <p className="text-muted-foreground">{lease.property.name}</p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleDownloadContract}>
-            <Download className="mr-2 h-4 w-4" />
-            Télécharger le contrat
-          </Button>
-          {lease.status === "ACTIVE" && (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => setRenewDialogOpen(true)}
-              >
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Renouveler
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setTerminateDialogOpen(true)}
-              >
-                <XCircle className="mr-2 h-4 w-4" />
-                Résilier
-              </Button>
-            </>
-          )}
-          <Button
-            variant="outline"
-            onClick={() => router.push(`/leases/${lease.id}/edit`)}
-          >
-            <Edit className="mr-2 h-4 w-4" />
-            Modifier
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => setDeleteDialogOpen(true)}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Supprimer
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Détails du bail"
+        description={`${lease.property.name} · ${lease.tenant.name}`}
+        backHref="/leases"
+        actions={
+          <>
+            <Button variant="outline" onClick={handleDownloadContract}>
+              <Download aria-hidden />
+              Télécharger le contrat
+            </Button>
+            {isStaff && (
+              <>
+                <Button asChild>
+                  <Link href={`/leases/${lease.id}/edit`}>
+                    <Pencil aria-hidden />
+                    Modifier
+                  </Link>
+                </Button>
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon" aria-label="Plus d'actions">
+                      <MoreHorizontal />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-48">
+                    {canRenewOrTerminate && (
+                      <>
+                        <DropdownMenuItem onSelect={() => setRenewDialogOpen(true)}>
+                          <RefreshCw />
+                          Renouveler
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setTerminateDialogOpen(true)}>
+                          <XCircle />
+                          Résilier
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                      </>
+                    )}
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onSelect={() => setDeleteDialogOpen(true)}
+                    >
+                      <Trash2 />
+                      Supprimer
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            )}
+          </>
+        }
+      >
+        <StatusBadge kind="lease" status={lease.status} />
+        <Badge variant="outline">{propertyTypeLabel(lease.property.type)}</Badge>
+        {isExpiringSoon && (
+          <Badge variant="warning">
+            Expire dans {daysUntilExpiry} jour{daysUntilExpiry > 1 ? "s" : ""}
+          </Badge>
+        )}
+      </PageHeader>
 
       {isExpiringSoon && (
-        <Card className="border-orange-500 bg-orange-50 dark:bg-orange-950/20">
-          <CardContent className="flex items-center gap-3 pt-6">
-            <AlertCircle className="h-5 w-5 text-orange-600" />
-            <p className="text-sm font-medium text-orange-900 dark:text-orange-100">
-              Ce bail expire dans {daysUntilExpiry} jour{daysUntilExpiry > 1 ? "s" : ""}.
-              Pensez à le renouveler.
-            </p>
-          </CardContent>
-        </Card>
+        <div
+          className="animate-fade-up flex flex-col gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          role="status"
+          style={{ "--stagger": 1 } as React.CSSProperties}
+        >
+          <p className="flex items-start gap-3 text-sm">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+            <span>
+              Ce bail expire dans{" "}
+              <span className="font-semibold tabular-nums">
+                {daysUntilExpiry} jour{daysUntilExpiry > 1 ? "s" : ""}
+              </span>
+              . Pensez à le renouveler.
+            </span>
+          </p>
+          {canRenewOrTerminate && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 bg-background"
+              onClick={() => setRenewDialogOpen(true)}
+            >
+              <RefreshCw aria-hidden />
+              Renouveler
+            </Button>
+          )}
+        </div>
       )}
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3">
         {/* Informations principales */}
-        <Card className="md:col-span-2">
+        <Card
+          className="animate-fade-up lg:col-span-2"
+          style={{ "--stagger": 2 } as React.CSSProperties}
+        >
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Informations du bail
-            </CardTitle>
+            <CardTitle>Informations du bail</CardTitle>
+            <CardDescription>Période, loyer et conditions du contrat.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="flex items-center gap-2">
-              <Badge variant={statusColors[lease.status]}>
-                {statusLabels[lease.status]}
-              </Badge>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <InfoItem
+                icon={CalendarDays}
+                label="Date de début"
+                value={formatDay(lease.startDate)}
+              />
+              <InfoItem
+                icon={CalendarCheck}
+                label="Date de fin"
+                value={formatDay(lease.endDate)}
+                tone={isExpiringSoon ? "warning" : "primary"}
+              />
             </div>
 
             <Separator />
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <Calendar className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Date de début</p>
-                  <p className="font-semibold">
-                    {new Date(lease.startDate).toLocaleDateString("fr-FR")}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <Calendar className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Date de fin</p>
-                  <p className="font-semibold">
-                    {new Date(lease.endDate).toLocaleDateString("fr-FR")}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-500/10 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Loyer mensuel</p>
-                  <p className="font-semibold">
-                    {lease.monthlyRent.toLocaleString()} FCFA
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/10 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Caution</p>
-                  <p className="font-semibold">
-                    {lease.securityDeposit.toLocaleString()} FCFA
-                  </p>
-                </div>
-              </div>
+              <InfoItem
+                icon={Wallet}
+                label="Loyer mensuel"
+                value={formatCurrency(lease.monthlyRent)}
+              />
+              <InfoItem
+                icon={ShieldCheck}
+                label="Caution"
+                value={formatCurrency(lease.securityDeposit)}
+                tone="default"
+              />
             </div>
 
             {lease.terms && (
               <>
                 <Separator />
                 <div>
-                  <h4 className="font-semibold mb-2">Conditions du bail</h4>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                  <h4 className="mb-2 text-sm font-semibold">Conditions du bail</h4>
+                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">
                     {lease.terms}
                   </p>
                 </div>
@@ -464,44 +470,74 @@ export default function LeaseDetailsPage() {
           </CardContent>
         </Card>
 
-        {/* Sidebar */}
+        {/* Colonne latérale */}
         <div className="space-y-6">
-          {/* Propriété */}
-          <Card>
+          {/* Bien */}
+          <Card className="animate-fade-up" style={{ "--stagger": 3 } as React.CSSProperties}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <Building2 className="h-4 w-4" />
-                Propriété
+                <Building2 className="h-4 w-4 text-muted-foreground" aria-hidden />
+                Bien
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <p className="font-semibold">{lease.property.name}</p>
-              <p className="text-sm text-muted-foreground">
-                {lease.property.address}
-              </p>
-              <p className="text-sm text-muted-foreground">{lease.property.city}</p>
-              <Separator className="my-2" />
-              <p className="text-sm font-medium">Propriétaire</p>
-              <p className="text-sm">{lease.property.owner.name}</p>
-              <p className="text-sm text-muted-foreground">
-                {lease.property.owner.email}
-              </p>
+            <CardContent className="space-y-3">
+              <div className="space-y-1">
+                <p className="font-semibold">{lease.property.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {lease.property.address}, {lease.property.city}
+                </p>
+              </div>
+              <Separator />
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Propriétaire
+                </p>
+                <p className="text-sm font-medium">{lease.property.owner.name}</p>
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Mail className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span className="truncate">{lease.property.owner.email}</span>
+                </p>
+              </div>
+              {isStaff && (
+                <Button variant="outline" size="sm" className="w-full" asChild>
+                  <Link href={`/properties/${lease.property.id}`}>
+                    Voir le bien
+                    <ArrowUpRight aria-hidden />
+                  </Link>
+                </Button>
+              )}
             </CardContent>
           </Card>
 
           {/* Locataire */}
-          <Card>
+          <Card className="animate-fade-up" style={{ "--stagger": 4 } as React.CSSProperties}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <User className="h-4 w-4" />
+                <User className="h-4 w-4 text-muted-foreground" aria-hidden />
                 Locataire
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <p className="font-semibold">{lease.tenant.name}</p>
-              <p className="text-sm text-muted-foreground">{lease.tenant.email}</p>
-              {lease.tenant.phone && (
-                <p className="text-sm text-muted-foreground">{lease.tenant.phone}</p>
+            <CardContent className="space-y-3">
+              <div className="space-y-1">
+                <p className="font-semibold">{lease.tenant.name}</p>
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Mail className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span className="truncate">{lease.tenant.email}</span>
+                </p>
+                {lease.tenant.phone && (
+                  <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Phone className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    {lease.tenant.phone}
+                  </p>
+                )}
+              </div>
+              {isStaff && (
+                <Button variant="outline" size="sm" className="w-full" asChild>
+                  <Link href={`/tenants/${lease.tenant.id}`}>
+                    Voir le locataire
+                    <ArrowUpRight aria-hidden />
+                  </Link>
+                </Button>
               )}
             </CardContent>
           </Card>
@@ -511,46 +547,60 @@ export default function LeaseDetailsPage() {
       <DepositCard leaseId={lease.id} leaseStatus={lease.status} />
 
       {/* Échéancier des loyers */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+      <Card className="animate-fade-up" style={{ "--stagger": 6 } as React.CSSProperties}>
+        <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CalendarClock className="h-5 w-5" />
+            <CalendarClock className="h-5 w-5 text-muted-foreground" aria-hidden />
             Échéancier des loyers
           </CardTitle>
+          <CardDescription>
+            Une échéance par mois, du début à la fin du bail.
+          </CardDescription>
           {canManageSchedule && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setScheduleDialogOpen(true)}
-            >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              {lease.payments.length > 0 ? "Régénérer" : "Générer"}
-            </Button>
+            <CardAction>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setScheduleDialogOpen(true)}
+              >
+                <RefreshCw aria-hidden />
+                {lease.payments.length > 0 ? "Régénérer" : "Générer"}
+              </Button>
+            </CardAction>
           )}
         </CardHeader>
         <CardContent className="space-y-4">
           {lease.payments.length > 0 ? (
             <>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <dl className="grid gap-4 rounded-lg border bg-muted/30 p-4 sm:grid-cols-3">
                 <div>
-                  <p className="text-sm text-muted-foreground">Échéances</p>
-                  <p className="font-semibold">{billedPayments.length}</p>
+                  <dt className="text-sm text-muted-foreground">Échéances</dt>
+                  <dd className="font-semibold tabular-nums">{billedPayments.length}</dd>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Payé</p>
-                  <p className="font-semibold">{formatCurrency(totalPaid)}</p>
+                  <dt className="text-sm text-muted-foreground">Payé</dt>
+                  <dd className="font-semibold tabular-nums text-success">
+                    {formatCurrency(totalPaid)}
+                  </dd>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Restant dû</p>
-                  <p className="font-semibold">{formatCurrency(totalDue)}</p>
+                  <dt className="text-sm text-muted-foreground">Restant dû</dt>
+                  <dd
+                    className={cn(
+                      "font-semibold tabular-nums",
+                      totalDue > 0 && "text-destructive"
+                    )}
+                  >
+                    {formatCurrency(totalDue)}
+                  </dd>
                 </div>
-              </div>
-              <div className="rounded-md border">
+              </dl>
+              <div className="overflow-hidden rounded-lg border">
                 <PaymentScheduleTable rows={lease.payments} />
               </div>
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
               Aucune échéance pour ce bail.
             </p>
           )}
@@ -571,7 +621,7 @@ export default function LeaseDetailsPage() {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isSyncingSchedule}>Annuler</AlertDialogCancel>
             <AlertDialogAction onClick={handleSyncSchedule} disabled={isSyncingSchedule}>
-              {isSyncingSchedule && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isSyncingSchedule && <Loader2 className="animate-spin" aria-hidden />}
               Régénérer
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -582,7 +632,7 @@ export default function LeaseDetailsPage() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+            <AlertDialogTitle>Supprimer ce bail ?</AlertDialogTitle>
             <AlertDialogDescription>
               Êtes-vous sûr de vouloir supprimer ce bail ? Ses échéances non payées
               seront également supprimées. Cette action est irréversible.
@@ -593,9 +643,9 @@ export default function LeaseDetailsPage() {
             <AlertDialogAction
               onClick={handleDelete}
               disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              variant="destructive"
             >
-              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isDeleting && <Loader2 className="animate-spin" aria-hidden />}
               Supprimer
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -608,11 +658,12 @@ export default function LeaseDetailsPage() {
           <DialogHeader>
             <DialogTitle>Renouveler le bail</DialogTitle>
             <DialogDescription>
-              Créez un nouveau bail pour prolonger la location
+              Un nouveau bail est créé pour prolonger la location ; celui-ci passe en
+              « Renouvelé ».
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="renewEndDate">Nouvelle date de fin</Label>
               <Input
                 id="renewEndDate"
@@ -621,7 +672,7 @@ export default function LeaseDetailsPage() {
                 onChange={(e) => setRenewEndDate(e.target.value)}
               />
             </div>
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="renewRent">Nouveau loyer mensuel (FCFA)</Label>
               <Input
                 id="renewRent"
@@ -640,7 +691,7 @@ export default function LeaseDetailsPage() {
               Annuler
             </Button>
             <Button onClick={handleRenew} disabled={isRenewing}>
-              {isRenewing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isRenewing && <Loader2 className="animate-spin" aria-hidden />}
               Renouveler
             </Button>
           </DialogFooter>
@@ -653,11 +704,11 @@ export default function LeaseDetailsPage() {
           <DialogHeader>
             <DialogTitle>Résilier le bail</DialogTitle>
             <DialogDescription>
-              Mettez fin au contrat de location
+              Mettez fin au contrat de location à la date indiquée.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="terminationDate">Date de résiliation</Label>
               <Input
                 id="terminationDate"
@@ -666,13 +717,13 @@ export default function LeaseDetailsPage() {
                 onChange={(e) => setTerminationDate(e.target.value)}
               />
             </div>
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="terminationReason">Raison (optionnel)</Label>
               <Textarea
                 id="terminationReason"
                 value={terminationReason}
                 onChange={(e) => setTerminationReason(e.target.value)}
-                placeholder="Expliquez la raison de la résiliation..."
+                placeholder="Expliquez la raison de la résiliation…"
               />
             </div>
           </div>
@@ -689,7 +740,7 @@ export default function LeaseDetailsPage() {
               disabled={isTerminating}
               variant="destructive"
             >
-              {isTerminating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isTerminating && <Loader2 className="animate-spin" aria-hidden />}
               Résilier
             </Button>
           </DialogFooter>

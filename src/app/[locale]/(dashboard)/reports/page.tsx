@@ -3,14 +3,26 @@ import { formatCurrency } from "@/lib/utils"
 import { redirect } from "next/navigation"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { Building2, CheckCircle2, Clock, Percent, TrendingUp, Wallet } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Button } from "@/components/ui/button"
-import { RevenueChart } from "@/components/dashboard/revenue-chart"
-import { OccupancyChart } from "@/components/dashboard/occupancy-chart"
+import { PageHeader } from "@/components/shared/page-header"
+import { statusLabel } from "@/components/shared/status-badge"
+import { StatCard } from "@/components/dashboard/stat-card"
+import { RevenueChart, type RevenuePoint } from "@/components/dashboard/revenue-chart"
+import { OccupancyChart, type OccupancyPoint } from "@/components/dashboard/occupancy-chart"
 import { PaymentStatusChart } from "@/components/dashboard/payment-status-chart"
 import { ExportButton } from "@/components/dashboard/export-button"
-import { Download, FileText } from "lucide-react"
+import { formatMonth } from "@/components/dashboard/format"
+
+type StatTone = "default" | "primary" | "success" | "warning" | "danger" | "info"
+
+const paymentTone: Record<string, StatTone> = {
+  PAID: "success",
+  PENDING: "warning",
+  OVERDUE: "danger",
+  CANCELLED: "default",
+}
 
 export default async function ReportsPage() {
   const session = await getServerSession(authOptions)
@@ -84,11 +96,8 @@ export default async function ReportsPage() {
   })
 
   // Calculate monthly revenue
-  const revenueByMonth = payments.reduce((acc: any[], payment) => {
-    const month = new Date(payment.dueDate).toLocaleString("en-US", {
-      month: "short",
-      year: "numeric"
-    })
+  const revenueByMonth = payments.reduce<RevenuePoint[]>((acc, payment) => {
+    const month = formatMonth(payment.dueDate)
 
     const existing = acc.find(item => item.month === month)
     if (existing) {
@@ -113,10 +122,10 @@ export default async function ReportsPage() {
   }, [])
 
   // Calculate occupancy rate by month
-  const occupancyByMonth = []
+  const occupancyByMonth: OccupancyPoint[] = []
   for (let i = 11; i >= 0; i--) {
     const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const month = date.toLocaleString("en-US", { month: "short", year: "numeric" })
+    const month = formatMonth(date)
 
     const totalProperties = properties.filter(p =>
       new Date(p.createdAt) <= date
@@ -138,151 +147,132 @@ export default async function ReportsPage() {
     })
   }
 
+  const totalRevenue = revenueByMonth.reduce((sum, item) => sum + item.total, 0)
+  const collected = revenueByMonth.reduce((sum, item) => sum + item.paid, 0)
+  const outstanding = revenueByMonth.reduce((sum, item) => sum + item.pending + item.overdue, 0)
+  const currentOccupancy = occupancyByMonth[occupancyByMonth.length - 1]
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Reports & Analytics</h1>
-          <p className="text-muted-foreground">
-            Detailed financial and occupancy insights
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <ExportButton type="revenue" data={revenueByMonth} />
-        </div>
-      </div>
+      <PageHeader
+        title="Rapports"
+        description="Revenus, occupation et paiements sur les 12 derniers mois."
+        actions={<ExportButton type="revenue" data={revenueByMonth} />}
+      />
 
       <Tabs defaultValue="revenue" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="revenue">Revenue</TabsTrigger>
-          <TabsTrigger value="occupancy">Occupancy</TabsTrigger>
-          <TabsTrigger value="payments">Payment Status</TabsTrigger>
+        <TabsList className="animate-fade-up">
+          <TabsTrigger value="revenue">Revenus</TabsTrigger>
+          <TabsTrigger value="occupancy">Occupation</TabsTrigger>
+          <TabsTrigger value="payments">Paiements</TabsTrigger>
         </TabsList>
 
         <TabsContent value="revenue" className="space-y-4">
-          <Card>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <StatCard
+              index={0}
+              title="Revenus facturés"
+              value={formatCurrency(totalRevenue)}
+              description="12 derniers mois"
+              icon={TrendingUp}
+              tone="primary"
+            />
+            <StatCard
+              index={1}
+              title="Encaissé"
+              value={formatCurrency(collected)}
+              description="Loyers payés"
+              icon={CheckCircle2}
+              tone="success"
+            />
+            <StatCard
+              index={2}
+              title="Restant dû"
+              value={formatCurrency(outstanding)}
+              description="En attente ou en retard"
+              icon={Clock}
+              tone={outstanding > 0 ? "warning" : "default"}
+            />
+          </div>
+          <Card className="animate-fade-up" style={{ "--stagger": 3 } as React.CSSProperties}>
             <CardHeader>
-              <CardTitle>Revenue Overview</CardTitle>
+              <CardTitle>Évolution des revenus</CardTitle>
               <CardDescription>
-                Monthly revenue trends for the last 12 months
+                Loyers encaissés, en attente et en retard, mois par mois
               </CardDescription>
             </CardHeader>
             <CardContent>
               <RevenueChart data={revenueByMonth} />
             </CardContent>
           </Card>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Total Revenue (12 months)</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {formatCurrency(revenueByMonth.reduce((sum, item) => sum + item.total, 0))}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Collected</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">
-                  {formatCurrency(revenueByMonth.reduce((sum, item) => sum + item.paid, 0))}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Outstanding</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-orange-600">
-                  {formatCurrency(revenueByMonth.reduce((sum, item) => sum + item.pending + item.overdue, 0))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
         </TabsContent>
 
         <TabsContent value="occupancy" className="space-y-4">
-          <Card>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <StatCard
+              index={0}
+              title="Taux d'occupation"
+              value={`${currentOccupancy?.rate || 0} %`}
+              description="Ce mois-ci"
+              icon={Percent}
+              tone="primary"
+            />
+            <StatCard
+              index={1}
+              title="Biens occupés"
+              value={currentOccupancy?.occupied || 0}
+              description="Avec un bail actif"
+              icon={Building2}
+              tone="info"
+            />
+            <StatCard
+              index={2}
+              title="Biens au total"
+              value={properties.length}
+              description="Dans votre portefeuille"
+              icon={Building2}
+            />
+          </div>
+          <Card className="animate-fade-up" style={{ "--stagger": 3 } as React.CSSProperties}>
             <CardHeader>
-              <CardTitle>Occupancy Rate</CardTitle>
+              <CardTitle>Taux d&apos;occupation</CardTitle>
               <CardDescription>
-                Property occupancy trends over the last 12 months
+                Part des biens loués sur les 12 derniers mois
               </CardDescription>
             </CardHeader>
             <CardContent>
               <OccupancyChart data={occupancyByMonth} />
             </CardContent>
           </Card>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Current Occupancy Rate</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {occupancyByMonth[occupancyByMonth.length - 1]?.rate || 0}%
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Occupied Properties</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {occupancyByMonth[occupancyByMonth.length - 1]?.occupied || 0}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Total Properties</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {properties.length}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
         </TabsContent>
 
         <TabsContent value="payments" className="space-y-4">
-          <Card>
+          {paymentStats.length > 0 && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {paymentStats.map((stat, i) => (
+                <StatCard
+                  key={stat.status}
+                  index={i}
+                  title={statusLabel("payment", stat.status)}
+                  value={formatCurrency(stat._sum.amount || 0)}
+                  description={`${stat._count.status} paiement${stat._count.status > 1 ? "s" : ""}`}
+                  icon={Wallet}
+                  tone={paymentTone[stat.status] ?? "default"}
+                />
+              ))}
+            </div>
+          )}
+          <Card className="animate-fade-up" style={{ "--stagger": paymentStats.length } as React.CSSProperties}>
             <CardHeader>
-              <CardTitle>Payment Status Distribution</CardTitle>
+              <CardTitle>Répartition des paiements</CardTitle>
               <CardDescription>
-                Overview of all payment statuses
+                Montants par statut, sur l&apos;ensemble de vos baux
               </CardDescription>
             </CardHeader>
             <CardContent>
               <PaymentStatusChart data={paymentStats} />
             </CardContent>
           </Card>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            {paymentStats.map((stat) => (
-              <Card key={stat.status}>
-                <CardHeader className="pb-2">
-                  <CardDescription>{stat.status}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {formatCurrency((stat._sum.amount || 0))}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {stat._count.status} payments
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
         </TabsContent>
       </Tabs>
     </div>

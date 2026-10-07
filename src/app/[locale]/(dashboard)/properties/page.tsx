@@ -1,19 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -21,38 +12,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PageHeader } from "@/components/shared/page-header";
+import { EmptyState } from "@/components/shared/empty-state";
+import { statusLabel } from "@/components/shared/status-badge";
+import { StatCard } from "@/components/dashboard/stat-card";
+import { PropertyCard, type PropertyCardData } from "@/components/properties/property-card";
+import { ListPagination } from "@/components/properties/list-pagination";
 import {
-  Building2,
-  Plus,
-  Search,
-  Eye,
-  Edit,
-  Loader2,
-  MapPin,
-  BedDouble,
-  Bath,
-  Maximize,
-} from "lucide-react";
+  propertyStatuses,
+  propertyTypeLabels,
+} from "@/components/properties/property-labels";
+import { Building2, KeyRound, Plus, Search, SearchX, Users, Wrench } from "lucide-react";
 
-interface Property {
-  id: string;
-  name: string;
-  address: string;
-  city: string;
-  type: string;
-  bedrooms: number;
-  bathrooms: number;
-  area: number;
-  monthlyRent: number;
-  status: string;
+interface Property extends PropertyCardData {
   owner: {
     name: string;
   };
-  leases: Array<{
-    tenant: {
-      name: string;
-    };
-  }>;
 }
 
 interface PaginationData {
@@ -62,34 +37,24 @@ interface PaginationData {
   totalPages: number;
 }
 
-const propertyTypeLabels: Record<string, string> = {
-  APARTMENT: "Appartement",
-  HOUSE: "Maison",
-  STUDIO: "Studio",
-  COMMERCIAL: "Commercial",
-  OFFICE: "Bureau",
-  OTHER: "Autre",
-};
+interface PropertyStats {
+  total: number;
+  available: number;
+  occupied: number;
+  maintenance: number;
+}
 
-const statusLabels: Record<string, string> = {
-  AVAILABLE: "Disponible",
-  OCCUPIED: "Occupé",
-  MAINTENANCE: "Maintenance",
-  UNAVAILABLE: "Indisponible",
-};
-
-const statusColors: Record<
-  string,
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  AVAILABLE: "default",
-  OCCUPIED: "secondary",
-  MAINTENANCE: "outline",
-  UNAVAILABLE: "destructive",
-};
+// Compte les biens d'un statut via la pagination de l'API (requête minimale)
+async function countProperties(status?: string) {
+  const params = new URLSearchParams({ page: "1", limit: "1" });
+  if (status) params.append("status", status);
+  const response = await fetch(`/api/properties?${params}`);
+  if (!response.ok) return 0;
+  const data = await response.json();
+  return (data.pagination?.total as number) ?? 0;
+}
 
 export default function PropertiesPage() {
-  const router = useRouter();
   const [properties, setProperties] = useState<Property[]>([]);
   const [pagination, setPagination] = useState<PaginationData>({
     total: 0,
@@ -98,6 +63,7 @@ export default function PropertiesPage() {
     totalPages: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<PropertyStats | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -134,9 +100,27 @@ export default function PropertiesPage() {
     }
   };
 
+  const fetchStats = async () => {
+    try {
+      const [total, available, occupied, maintenance] = await Promise.all([
+        countProperties(),
+        countProperties("AVAILABLE"),
+        countProperties("OCCUPIED"),
+        countProperties("MAINTENANCE"),
+      ]);
+      setStats({ total, available, occupied, maintenance });
+    } catch (error) {
+      console.error("Erreur:", error);
+    }
+  };
+
   useEffect(() => {
     fetchProperties();
   }, [pagination.page, statusFilter, typeFilter]);
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
 
   const filteredProperties = properties.filter((property) =>
     property.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -144,216 +128,157 @@ export default function PropertiesPage() {
     property.address.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const hasFilters = searchTerm !== "" || statusFilter !== "all" || typeFilter !== "all";
+
+  const resetFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setTypeFilter("all");
+  };
+
+  const createAction = (
+    <Button asChild>
+      <Link href="/properties/new">
+        <Plus aria-hidden />
+        Nouveau bien
+      </Link>
+    </Button>
+  );
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Propriétés</h1>
-          <p className="text-muted-foreground">
-            Gérez vos propriétés immobilières
-          </p>
-        </div>
-        <Button onClick={() => router.push("/properties/new")}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nouvelle propriété
-        </Button>
+      <PageHeader
+        title="Biens"
+        description="Gérez votre parc immobilier et suivez son occupation."
+        actions={createAction}
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Total des biens"
+          value={stats?.total ?? "—"}
+          icon={Building2}
+          index={0}
+        />
+        <StatCard
+          title="Disponibles"
+          value={stats?.available ?? "—"}
+          icon={KeyRound}
+          tone="success"
+          index={1}
+        />
+        <StatCard
+          title="Occupés"
+          value={stats?.occupied ?? "—"}
+          icon={Users}
+          tone="info"
+          index={2}
+        />
+        <StatCard
+          title="En travaux"
+          value={stats?.maintenance ?? "—"}
+          icon={Wrench}
+          tone="warning"
+          index={3}
+        />
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
-              Liste des propriétés ({pagination.total})
-            </CardTitle>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Rechercher..."
-                  className="pl-8 w-full sm:w-[250px]"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-full sm:w-[150px]">
-                  <SelectValue placeholder="Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les types</SelectItem>
-                  {Object.entries(propertyTypeLabels).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-[150px]">
-                  <SelectValue placeholder="Statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les statuts</SelectItem>
-                  {Object.entries(statusLabels).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : filteredProperties.length === 0 ? (
-            <div className="text-center py-12">
-              <Building2 className="mx-auto h-12 w-12 text-muted-foreground" />
-              <h3 className="mt-4 text-lg font-semibold">
-                Aucune propriété trouvée
-              </h3>
-              <p className="text-muted-foreground">
-                Commencez par créer votre première propriété
-              </p>
-              <Button
-                onClick={() => router.push("/properties/new")}
-                className="mt-4"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Nouvelle propriété
-              </Button>
-            </div>
-          ) : (
-            <>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nom</TableHead>
-                      <TableHead>Localisation</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Caractéristiques</TableHead>
-                      <TableHead>Loyer</TableHead>
-                      <TableHead>Statut</TableHead>
-                      <TableHead>Locataire</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredProperties.map((property) => (
-                      <TableRow key={property.id}>
-                        <TableCell className="font-medium">
-                          {property.name}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                            <MapPin className="h-3 w-3" />
-                            {property.city}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {propertyTypeLabels[property.type]}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-3 text-sm text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <BedDouble className="h-3 w-3" />
-                              {property.bedrooms}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Bath className="h-3 w-3" />
-                              {property.bathrooms}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Maximize className="h-3 w-3" />
-                              {property.area}m²
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-semibold">
-                          {property.monthlyRent.toLocaleString()} FCFA
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={statusColors[property.status]}>
-                            {statusLabels[property.status]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {property.leases.length > 0
-                            ? property.leases[0].tenant.name
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                router.push(`/properties/${property.id}`)
-                              }
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                router.push(`/properties/${property.id}/edit`)
-                              }
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+      {/* Barre d'outils : recherche + filtres */}
+      <div
+        className="animate-fade-up flex flex-col gap-2 sm:flex-row sm:items-center"
+        style={{ "--stagger": 4 } as React.CSSProperties}
+      >
+        <div className="relative flex-1">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            type="search"
+            placeholder="Rechercher un nom, une adresse, une ville…"
+            aria-label="Rechercher un bien"
+            className="h-10 bg-card pl-9 sm:h-9"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:flex">
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="h-10 w-full bg-card sm:h-9 sm:w-[160px]" aria-label="Filtrer par type">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les types</SelectItem>
+              {Object.entries(propertyTypeLabels).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-10 w-full bg-card sm:h-9 sm:w-[160px]" aria-label="Filtrer par statut">
+              <SelectValue placeholder="Statut" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les statuts</SelectItem>
+              {propertyStatuses.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {statusLabel("property", value)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
-              {pagination.totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Page {pagination.page} sur {pagination.totalPages}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setPagination((prev) => ({
-                          ...prev,
-                          page: prev.page - 1,
-                        }))
-                      }
-                      disabled={pagination.page === 1}
-                    >
-                      Précédent
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setPagination((prev) => ({
-                          ...prev,
-                          page: prev.page + 1,
-                        }))
-                      }
-                      disabled={pagination.page === pagination.totalPages}
-                    >
-                      Suivant
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
+      {loading ? (
+        <div
+          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+          aria-busy="true"
+          aria-live="polite"
+        >
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-44 rounded-xl" />
+          ))}
+        </div>
+      ) : filteredProperties.length === 0 ? (
+        hasFilters ? (
+          <EmptyState
+            icon={SearchX}
+            title="Aucun bien ne correspond"
+            description="Essayez un autre terme de recherche ou réinitialisez les filtres."
+            action={
+              <Button variant="outline" onClick={resetFilters}>
+                Réinitialiser les filtres
+              </Button>
+            }
+          />
+        ) : (
+          <EmptyState
+            icon={Building2}
+            title="Aucun bien pour le moment"
+            description="Ajoutez votre premier bien pour commencer à gérer vos locations."
+            action={createAction}
+          />
+        )
+      ) : (
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {filteredProperties.map((property, i) => (
+              <PropertyCard key={property.id} property={property} index={Math.min(i, 8)} />
+            ))}
+          </div>
+
+          <ListPagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            itemLabels={["bien", "biens"]}
+            onPageChange={(page) => setPagination((prev) => ({ ...prev, page }))}
+          />
+        </div>
+      )}
     </div>
   );
 }

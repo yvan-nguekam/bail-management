@@ -5,7 +5,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -23,6 +29,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { StatusBadge } from "@/components/shared/status-badge";
 import {
   MAINTENANCE_PRIORITIES,
   MAINTENANCE_STATUSES,
@@ -145,12 +152,15 @@ export function ManageRequestCard({ request, onUpdated }: ManageRequestCardProps
   };
 
   return (
-    <Card>
+    <Card className="animate-fade-up" style={{ "--stagger": 3 } as React.CSSProperties}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Settings2 className="h-5 w-5" />
+          <Settings2 className="h-4 w-4 text-muted-foreground" aria-hidden />
           Gestion
         </CardTitle>
+        <CardDescription>
+          Suivi de l&apos;intervention : statut, priorité, intervenant, date et coût.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -175,6 +185,13 @@ export function ManageRequestCard({ request, onUpdated }: ManageRequestCardProps
                       ))}
                     </SelectContent>
                   </Select>
+                  {field.value !== request.status && (
+                    <FormDescription className="flex flex-wrap items-center gap-1.5">
+                      <StatusBadge kind="maintenance" status={request.status} />
+                      <span aria-hidden>→</span>
+                      <StatusBadge kind="maintenance" status={field.value} />
+                    </FormDescription>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -254,9 +271,24 @@ export function ManageRequestCard({ request, onUpdated }: ManageRequestCardProps
               name="cost"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Coût (FCFA)</FormLabel>
+                  <FormLabel>Coût</FormLabel>
                   <FormControl>
-                    <Input type="number" min="0" step="any" placeholder="—" {...field} />
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="any"
+                        placeholder="0"
+                        className="pr-16 tabular-nums"
+                        {...field}
+                      />
+                      <span
+                        className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground"
+                        aria-hidden
+                      >
+                        FCFA
+                      </span>
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -264,7 +296,7 @@ export function ManageRequestCard({ request, onUpdated }: ManageRequestCardProps
             />
 
             <Button type="submit" className="w-full" disabled={isSaving}>
-              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
               Enregistrer
             </Button>
           </form>

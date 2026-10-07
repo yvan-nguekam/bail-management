@@ -1,25 +1,35 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
-  ArrowLeft,
-  Edit,
+  Pencil,
   Trash2,
-  Building2,
-  MapPin,
-  Calendar,
+  CalendarDays,
   BedDouble,
   Bath,
   Maximize,
-  DollarSign,
+  Wallet,
+  ShieldCheck,
   User,
   Loader2,
-  AlertCircle,
+  Wrench,
+  FileText,
+  Plus,
+  Mail,
+  Phone,
+  ArrowUpRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -32,6 +42,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { PageHeader } from "@/components/shared/page-header";
+import { PageSkeleton } from "@/components/shared/page-skeleton";
+import { StatusBadge } from "@/components/shared/status-badge";
+import { InfoItem, DetailRow } from "@/components/properties/info-item";
+import { formatDay, propertyTypeLabel } from "@/components/properties/property-labels";
+import { formatCurrency } from "@/lib/utils";
 
 interface Property {
   id: string;
@@ -83,32 +99,6 @@ interface Property {
     createdAt: string;
   }>;
 }
-
-const propertyTypeLabels: Record<string, string> = {
-  APARTMENT: "Appartement",
-  HOUSE: "Maison",
-  STUDIO: "Studio",
-  COMMERCIAL: "Commercial",
-  OFFICE: "Bureau",
-  OTHER: "Autre",
-};
-
-const statusLabels: Record<string, string> = {
-  AVAILABLE: "Disponible",
-  OCCUPIED: "Occupé",
-  MAINTENANCE: "Maintenance",
-  UNAVAILABLE: "Indisponible",
-};
-
-const statusColors: Record<
-  string,
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  AVAILABLE: "default",
-  OCCUPIED: "secondary",
-  MAINTENANCE: "outline",
-  UNAVAILABLE: "destructive",
-};
 
 export default function PropertyDetailsPage() {
   const params = useParams<{ id: string }>();
@@ -168,11 +158,7 @@ export default function PropertyDetailsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton stats={0} />;
   }
 
   if (!property) {
@@ -180,237 +166,239 @@ export default function PropertyDetailsPage() {
   }
 
   const activeLease = property.leases.find((lease) => lease.status === "ACTIVE");
+  const otherLeases = property.leases.filter((lease) => lease.id !== activeLease?.id);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold">{property.name}</h1>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <MapPin className="h-4 w-4" />
-              <span>
-                {property.address}, {property.city}
-              </span>
-            </div>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => router.push(`/properties/${property.id}/edit`)}
-          >
-            <Edit className="mr-2 h-4 w-4" />
-            Modifier
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => setDeleteDialogOpen(true)}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Supprimer
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title={property.name}
+        description={`${property.address}, ${property.city}`}
+        backHref="/properties"
+        actions={
+          <>
+            {property.status === "AVAILABLE" && !activeLease && (
+              <Button asChild>
+                <Link href={`/leases/new?propertyId=${property.id}`}>
+                  <Plus aria-hidden />
+                  Nouveau bail
+                </Link>
+              </Button>
+            )}
+            <Button variant="outline" asChild>
+              <Link href={`/properties/${property.id}/edit`}>
+                <Pencil aria-hidden />
+                Modifier
+              </Link>
+            </Button>
+            <Button
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <Trash2 aria-hidden />
+              Supprimer
+            </Button>
+          </>
+        }
+      >
+        <StatusBadge kind="property" status={property.status} />
+        <Badge variant="outline">{propertyTypeLabel(property.type)}</Badge>
+      </PageHeader>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3">
         {/* Informations principales */}
-        <Card className="md:col-span-2">
+        <Card
+          className="animate-fade-up lg:col-span-2"
+          style={{ "--stagger": 1 } as React.CSSProperties}
+        >
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
-              Informations de la propriété
-            </CardTitle>
+            <CardTitle>Informations du bien</CardTitle>
+            <CardDescription>
+              Disponible à partir du {formatDay(property.availableFrom)}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="flex flex-wrap gap-2">
-              <Badge variant={statusColors[property.status]} className="text-sm">
-                {statusLabels[property.status]}
-              </Badge>
-              <Badge variant="outline" className="text-sm">
-                {propertyTypeLabels[property.type]}
-              </Badge>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <InfoItem icon={BedDouble} label="Chambres" value={property.bedrooms} />
+              <InfoItem icon={Bath} label="Salles de bain" value={property.bathrooms} />
+              <InfoItem icon={Maximize} label="Surface" value={`${property.area} m²`} />
+            </div>
+
+            <Separator />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <InfoItem
+                icon={Wallet}
+                label="Loyer mensuel"
+                value={formatCurrency(property.monthlyRent)}
+              />
+              <InfoItem
+                icon={ShieldCheck}
+                label="Caution"
+                value={formatCurrency(property.securityDeposit)}
+                tone="default"
+              />
             </div>
 
             {property.description && (
-              <div>
-                <h4 className="font-semibold mb-2">Description</h4>
-                <p className="text-muted-foreground">{property.description}</p>
-              </div>
+              <>
+                <Separator />
+                <div>
+                  <h4 className="mb-2 text-sm font-semibold">Description</h4>
+                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                    {property.description}
+                  </p>
+                </div>
+              </>
             )}
 
             <Separator />
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <BedDouble className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Chambres</p>
-                  <p className="font-semibold">{property.bedrooms}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <Bath className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Salles de bain</p>
-                  <p className="font-semibold">{property.bathrooms}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <Maximize className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Surface</p>
-                  <p className="font-semibold">{property.area} m²</p>
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
             <div>
-              <h4 className="font-semibold mb-3">Localisation</h4>
-              <div className="space-y-2 text-sm">
-                <p>
-                  <span className="text-muted-foreground">Adresse: </span>
-                  {property.address}
-                </p>
-                <p>
-                  <span className="text-muted-foreground">Ville: </span>
-                  {property.city}
-                </p>
-                <p>
-                  <span className="text-muted-foreground">Code postal: </span>
-                  {property.postalCode}
-                </p>
-                <p>
-                  <span className="text-muted-foreground">Pays: </span>
-                  {property.country}
-                </p>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div>
-              <h4 className="font-semibold mb-3">Informations financières</h4>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-green-500/10 rounded-lg">
-                    <DollarSign className="h-5 w-5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Loyer mensuel</p>
-                    <p className="font-semibold">
-                      {property.monthlyRent.toLocaleString()} FCFA
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-500/10 rounded-lg">
-                    <DollarSign className="h-5 w-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Caution</p>
-                    <p className="font-semibold">
-                      {property.securityDeposit.toLocaleString()} FCFA
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Calendar className="h-4 w-4" />
-              <span>
-                Disponible à partir du{" "}
-                {new Date(property.availableFrom).toLocaleDateString("fr-FR")}
-              </span>
+              <h4 className="mb-3 text-sm font-semibold">Localisation</h4>
+              <dl className="space-y-2">
+                <DetailRow label="Adresse" value={property.address} />
+                <DetailRow label="Ville" value={property.city} />
+                <DetailRow label="Code postal" value={property.postalCode} />
+                <DetailRow label="Pays" value={property.country} />
+              </dl>
             </div>
           </CardContent>
         </Card>
 
-        {/* Sidebar */}
+        {/* Colonne latérale */}
         <div className="space-y-6">
-          {/* Propriétaire */}
-          <Card>
+          {/* Locataire actuel */}
+          <Card className="animate-fade-up" style={{ "--stagger": 2 } as React.CSSProperties}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <User className="h-4 w-4" />
+                <User className="h-4 w-4 text-muted-foreground" aria-hidden />
+                Locataire actuel
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {activeLease ? (
+                <>
+                  <div className="space-y-1">
+                    <p className="font-semibold">{activeLease.tenant.name}</p>
+                    <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Mail className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      <span className="truncate">{activeLease.tenant.email}</span>
+                    </p>
+                    {activeLease.tenant.phone && (
+                      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Phone className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        {activeLease.tenant.phone}
+                      </p>
+                    )}
+                  </div>
+                  <Separator />
+                  <div className="flex items-center justify-between gap-2 text-sm">
+                    <span className="flex items-center gap-2 text-muted-foreground">
+                      <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      Du {formatDay(activeLease.startDate)} au {formatDay(activeLease.endDate)}
+                    </span>
+                  </div>
+                  <Button variant="outline" size="sm" className="w-full" asChild>
+                    <Link href={`/leases/${activeLease.id}`}>
+                      Voir le bail
+                      <ArrowUpRight aria-hidden />
+                    </Link>
+                  </Button>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Aucun bail actif sur ce bien.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Propriétaire */}
+          <Card className="animate-fade-up" style={{ "--stagger": 3 } as React.CSSProperties}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <User className="h-4 w-4 text-muted-foreground" aria-hidden />
                 Propriétaire
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-1">
               <p className="font-semibold">{property.owner.name}</p>
-              <p className="text-sm text-muted-foreground">{property.owner.email}</p>
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Mail className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span className="truncate">{property.owner.email}</span>
+              </p>
               {property.owner.phone && (
-                <p className="text-sm text-muted-foreground">
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Phone className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   {property.owner.phone}
                 </p>
               )}
             </CardContent>
           </Card>
 
-          {/* Locataire actuel */}
-          {activeLease && (
-            <Card>
+          {/* Historique des baux */}
+          {otherLeases.length > 0 && (
+            <Card className="animate-fade-up" style={{ "--stagger": 4 } as React.CSSProperties}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <User className="h-4 w-4" />
-                  Locataire actuel
+                  <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />
+                  Autres baux
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
-                <p className="font-semibold">{activeLease.tenant.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {activeLease.tenant.email}
-                </p>
-                {activeLease.tenant.phone && (
-                  <p className="text-sm text-muted-foreground">
-                    {activeLease.tenant.phone}
-                  </p>
-                )}
-                <Separator className="my-2" />
-                <p className="text-sm text-muted-foreground">
-                  Bail du{" "}
-                  {new Date(activeLease.startDate).toLocaleDateString("fr-FR")}{" "}
-                  au {new Date(activeLease.endDate).toLocaleDateString("fr-FR")}
-                </p>
+              <CardContent>
+                <ul className="divide-y">
+                  {otherLeases.map((lease) => (
+                    <li key={lease.id}>
+                      <Link
+                        href={`/leases/${lease.id}`}
+                        className="-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 text-sm transition-colors hover:bg-muted/50"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium">{lease.tenant.name}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {formatDay(lease.startDate)} – {formatDay(lease.endDate)}
+                          </span>
+                        </span>
+                        <StatusBadge kind="lease" status={lease.status} />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
               </CardContent>
             </Card>
           )}
 
           {/* Demandes de maintenance récentes */}
           {property.maintenanceRequests.length > 0 && (
-            <Card>
+            <Card className="animate-fade-up" style={{ "--stagger": 5 } as React.CSSProperties}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <AlertCircle className="h-4 w-4" />
+                  <Wrench className="h-4 w-4 text-muted-foreground" aria-hidden />
                   Maintenance récente
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {property.maintenanceRequests.map((request) => (
-                  <div
-                    key={request.id}
-                    className="text-sm p-2 bg-muted/50 rounded-lg"
-                  >
-                    <p className="font-medium">{request.title}</p>
-                    <p className="text-muted-foreground text-xs">
-                      {new Date(request.createdAt).toLocaleDateString("fr-FR")}
-                    </p>
-                  </div>
-                ))}
+              <CardContent>
+                <ul className="divide-y">
+                  {property.maintenanceRequests.map((request) => (
+                    <li key={request.id}>
+                      <Link
+                        href={`/maintenance/${request.id}`}
+                        className="-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 text-sm transition-colors hover:bg-muted/50"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium">{request.title}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {new Date(request.createdAt).toLocaleDateString("fr-FR", {
+                              timeZone: "UTC",
+                            })}
+                          </span>
+                        </span>
+                        <StatusBadge kind="maintenance" status={request.status} />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
               </CardContent>
             </Card>
           )}
@@ -421,7 +409,7 @@ export default function PropertyDetailsPage() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+            <AlertDialogTitle>Supprimer ce bien ?</AlertDialogTitle>
             <AlertDialogDescription>
               Êtes-vous sûr de vouloir supprimer cette propriété ? Cette action
               est irréversible.
@@ -432,9 +420,9 @@ export default function PropertyDetailsPage() {
             <AlertDialogAction
               onClick={handleDelete}
               disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              variant="destructive"
             >
-              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isDeleting && <Loader2 className="animate-spin" aria-hidden />}
               Supprimer
             </AlertDialogAction>
           </AlertDialogFooter>

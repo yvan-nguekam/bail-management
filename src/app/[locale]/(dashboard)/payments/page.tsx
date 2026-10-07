@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -25,15 +24,23 @@ import {
   CreditCard,
   Plus,
   Search,
-  Eye,
-  Loader2,
-  Calendar,
-  DollarSign,
-  Building2,
-  User,
-  CheckCircle,
+  ChevronRight,
+  Clock,
+  CheckCircle2,
   AlertCircle,
 } from "lucide-react";
+import { PageHeader } from "@/components/shared/page-header";
+import { StatusBadge, statusLabel } from "@/components/shared/status-badge";
+import { EmptyState } from "@/components/shared/empty-state";
+import { TableSkeleton } from "@/components/shared/page-skeleton";
+import { StatCard } from "@/components/dashboard/stat-card";
+import { formatCurrency, cn } from "@/lib/utils";
+import {
+  formatDate,
+  getDaysOverdue,
+  overdueLabel,
+  paymentMethodLabel,
+} from "@/components/payments/payment-helpers";
 
 interface Payment {
   id: string;
@@ -65,30 +72,7 @@ interface PaginationData {
   totalPages: number;
 }
 
-const statusLabels: Record<string, string> = {
-  PENDING: "En attente",
-  PAID: "Payé",
-  OVERDUE: "En retard",
-  CANCELLED: "Annulé",
-};
-
-const statusColors: Record<
-  string,
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  PENDING: "outline",
-  PAID: "default",
-  OVERDUE: "destructive",
-  CANCELLED: "secondary",
-};
-
-const paymentMethodLabels: Record<string, string> = {
-  CASH: "Espèces",
-  BANK_TRANSFER: "Virement",
-  CREDIT_CARD: "Carte",
-  CHECK: "Chèque",
-  MOBILE_MONEY: "Mobile Money",
-};
+const PAYMENT_STATUSES = ["PENDING", "PAID", "OVERDUE", "CANCELLED"];
 
 export default function PaymentsPage() {
   const router = useRouter();
@@ -148,151 +132,125 @@ export default function PaymentsPage() {
         .includes(searchTerm.toLowerCase())
   );
 
-  const getDaysOverdue = (dueDate: string) => {
-    const days = Math.ceil(
-      (new Date().getTime() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24)
-    );
-    return days;
-  };
+  const isFiltered = searchTerm.trim() !== "" || statusFilter !== "all";
+  const countByStatus = (status: string) =>
+    payments.filter((p) => p.status === status).length;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Paiements</h1>
-          <p className="text-muted-foreground">
-            Suivez les paiements des loyers
-          </p>
-        </div>
-        <Button onClick={() => router.push("/payments/new")}>
-          <Plus className="mr-2 h-4 w-4" />
-          Enregistrer un paiement
-        </Button>
+      <PageHeader
+        title="Paiements"
+        description="Suivez les paiements de loyers et leurs échéances"
+        actions={
+          <Button onClick={() => router.push("/payments/new")}>
+            <Plus className="h-4 w-4" aria-hidden />
+            Nouveau paiement
+          </Button>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          index={0}
+          title="Total"
+          value={pagination.total}
+          description="Tous statuts confondus"
+          icon={CreditCard}
+        />
+        <StatCard
+          index={1}
+          title="En attente"
+          value={countByStatus("PENDING")}
+          description="Sur cette page"
+          icon={Clock}
+        />
+        <StatCard
+          index={2}
+          title="Payés"
+          value={countByStatus("PAID")}
+          description="Sur cette page"
+          icon={CheckCircle2}
+          tone="success"
+        />
+        <StatCard
+          index={3}
+          title="En retard"
+          value={countByStatus("OVERDUE")}
+          description="Sur cette page"
+          icon={AlertCircle}
+          tone="danger"
+        />
       </div>
 
-      {/* Statistiques rapides */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total</p>
-                <p className="text-2xl font-bold">{pagination.total}</p>
-              </div>
-              <CreditCard className="h-8 w-8 text-muted-foreground" />
+      <Card className="animate-fade-up" style={{ "--stagger": 4 } as React.CSSProperties}>
+        <CardHeader className="gap-4 sm:flex sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle>Liste des paiements</CardTitle>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="relative">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden
+              />
+              <Input
+                type="search"
+                placeholder="Bien, locataire, ville…"
+                aria-label="Rechercher un paiement"
+                className="w-full pl-9 sm:w-[240px]"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Payés</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {payments.filter((p) => p.status === "PAID").length}
-                </p>
-              </div>
-              <CheckCircle className="h-8 w-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">En attente</p>
-                <p className="text-2xl font-bold text-orange-600">
-                  {payments.filter((p) => p.status === "PENDING").length}
-                </p>
-              </div>
-              <Calendar className="h-8 w-8 text-orange-600" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">En retard</p>
-                <p className="text-2xl font-bold text-red-600">
-                  {payments.filter((p) => p.status === "OVERDUE").length}
-                </p>
-              </div>
-              <AlertCircle className="h-8 w-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" />
-              Liste des paiements
-            </CardTitle>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Rechercher..."
-                  className="pl-8 w-full sm:w-[250px]"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-[150px]">
-                  <SelectValue placeholder="Statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les statuts</SelectItem>
-                  {Object.entries(statusLabels).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full sm:w-[160px]" aria-label="Filtrer par statut">
+                <SelectValue placeholder="Statut" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les statuts</SelectItem>
+                {PAYMENT_STATUSES.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {statusLabel("payment", value)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
+            <TableSkeleton rows={6} />
           ) : filteredPayments.length === 0 ? (
-            <div className="text-center py-12">
-              <CreditCard className="mx-auto h-12 w-12 text-muted-foreground" />
-              <h3 className="mt-4 text-lg font-semibold">
-                Aucun paiement trouvé
-              </h3>
-              <p className="text-muted-foreground">
-                Commencez par enregistrer un paiement
-              </p>
-              <Button
-                onClick={() => router.push("/payments/new")}
-                className="mt-4"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Enregistrer un paiement
-              </Button>
-            </div>
+            <EmptyState
+              icon={CreditCard}
+              title="Aucun paiement trouvé"
+              description={
+                isFiltered
+                  ? "Aucun paiement ne correspond à ces critères."
+                  : "Commencez par enregistrer un paiement de loyer."
+              }
+              action={
+                !isFiltered ? (
+                  <Button onClick={() => router.push("/payments/new")}>
+                    <Plus className="h-4 w-4" aria-hidden />
+                    Nouveau paiement
+                  </Button>
+                ) : undefined
+              }
+            />
           ) : (
             <>
-              <div className="rounded-md border">
-                <Table>
+              <div className="overflow-hidden rounded-lg border">
+                <Table className="[&_td]:px-3 [&_td]:py-3 [&_th]:px-3">
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Propriété</TableHead>
+                    <TableRow className="bg-muted/40 hover:bg-muted/40">
+                      <TableHead>Bien</TableHead>
                       <TableHead>Locataire</TableHead>
-                      <TableHead>Montant</TableHead>
-                      <TableHead>Date d'échéance</TableHead>
+                      <TableHead className="text-right">Montant</TableHead>
+                      <TableHead>Échéance</TableHead>
                       <TableHead>Méthode</TableHead>
                       <TableHead>Statut</TableHead>
-                      <TableHead>Info</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="w-12">
+                        <span className="sr-only">Ouvrir</span>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -300,85 +258,72 @@ export default function PaymentsPage() {
                       const daysOverdue = getDaysOverdue(payment.dueDate);
                       const isOverdue =
                         payment.status !== "PAID" && daysOverdue > 0;
+                      const method = paymentMethodLabel(payment.paymentMethod);
 
                       return (
-                        <TableRow key={payment.id}>
+                        <TableRow
+                          key={payment.id}
+                          className="cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => router.push(`/payments/${payment.id}`)}
+                        >
                           <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Building2 className="h-3 w-3 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {payment.lease.property.name}
-                                </div>
-                                <div className="text-sm text-muted-foreground">
-                                  {payment.lease.property.city}
-                                </div>
-                              </div>
+                            <div className="font-medium">
+                              {payment.lease.property.name}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {payment.lease.property.city}
                             </div>
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-2">
-                              <User className="h-3 w-3 text-muted-foreground" />
-                              <div className="font-medium">
-                                {payment.lease.tenant.name}
-                              </div>
+                            <div className="font-medium">
+                              {payment.lease.tenant.name}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {payment.lease.tenant.email}
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1 font-semibold">
-                              <DollarSign className="h-3 w-3 text-green-600" />
-                              {payment.amount.toLocaleString()} FCFA
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1 text-sm">
-                              <Calendar className="h-3 w-3 text-muted-foreground" />
-                              {new Date(payment.dueDate).toLocaleDateString(
-                                "fr-FR"
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {payment.paymentMethod ? (
-                              <span className="text-sm">
-                                {paymentMethodLabels[payment.paymentMethod]}
-                              </span>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">
-                                -
-                              </span>
+                          <TableCell
+                            className={cn(
+                              "text-right tabular-nums",
+                              isOverdue ? "font-medium text-destructive" : "font-medium"
                             )}
+                          >
+                            {formatCurrency(payment.amount)}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={statusColors[payment.status]}>
-                              {statusLabels[payment.status]}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
+                            <div className="tabular-nums">{formatDate(payment.dueDate)}</div>
+                            {isOverdue && (
+                              <div className="text-xs font-medium text-destructive">
+                                {overdueLabel(daysOverdue)}
+                              </div>
+                            )}
                             {payment.status === "PAID" && payment.paidDate && (
                               <div className="text-xs text-muted-foreground">
-                                Payé le{" "}
-                                {new Date(payment.paidDate).toLocaleDateString(
-                                  "fr-FR"
-                                )}
+                                Payé le {formatDate(payment.paidDate)}
                               </div>
                             )}
-                            {isOverdue && (
-                              <div className="text-xs text-destructive font-medium">
-                                {daysOverdue} jour{daysOverdue > 1 ? "s" : ""} de
-                                retard
-                              </div>
+                          </TableCell>
+                          <TableCell>
+                            {method ? (
+                              <span>{method}</span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
                             )}
+                          </TableCell>
+                          <TableCell>
+                            <StatusBadge kind="payment" status={payment.status} />
                           </TableCell>
                           <TableCell className="text-right">
                             <Button
                               variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                router.push(`/payments/${payment.id}`)
-                              }
+                              size="icon-sm"
+                              aria-label={`Voir le paiement de ${payment.lease.tenant.name}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/payments/${payment.id}`);
+                              }}
                             >
-                              <Eye className="h-4 w-4" />
+                              <ChevronRight className="h-4 w-4" aria-hidden />
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -389,8 +334,8 @@ export default function PaymentsPage() {
               </div>
 
               {pagination.totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-muted-foreground">
+                <div className="mt-4 flex items-center justify-between gap-4">
+                  <p className="text-sm text-muted-foreground tabular-nums">
                     Page {pagination.page} sur {pagination.totalPages}
                   </p>
                   <div className="flex gap-2">
