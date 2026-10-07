@@ -193,9 +193,27 @@ Obligatoires :
 - `NEXTAUTH_SECRET`
 
 Optionnelles :
+- `CRON_SECRET` (tâches planifiées, voir ci-dessous)
 - `RESEND_API_KEY` (emails)
 - `UPLOADTHING_*` (upload fichiers)
 - `STRIPE_*` (paiements)
+
+## ⏰ Tâches planifiées
+
+La route `/api/cron/lease-status` met à jour les statuts selon le calendrier :
+- baux `DRAFT` dont la date de début est atteinte → `ACTIVE` (bien `OCCUPIED`)
+- baux `ACTIVE` dont la date de fin est dépassée → `EXPIRED` (bien `AVAILABLE`)
+- échéances `PENDING` dont la date est dépassée → `OVERDUE` (locataire notifié)
+- préavis de fin de bail à 60 puis 30 jours (locataire, propriétaire, gestionnaire)
+
+Elle doit être appelée **une fois par jour** avec l'en-tête `Authorization: Bearer <CRON_SECRET>`
+(GET ou POST), par exemple via Vercel Cron, Supabase Cron ou cron-job.org. Un administrateur
+connecté peut aussi la déclencher. Les traitements peuvent être relancés sans créer de doublons.
+
+En local, avec l'application lancée (`pnpm dev`) et `CRON_SECRET` dans `.env` :
+```bash
+pnpm cron:lease-status
+```
 
 ## 🚢 Déploiement
 
