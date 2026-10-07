@@ -68,6 +68,7 @@ export default function NewLeasePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedPropertyId = searchParams.get("propertyId");
+  const preselectedTenantId = searchParams.get("tenantId");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -78,7 +79,7 @@ export default function NewLeasePage() {
     resolver: zodResolver(leaseSchema),
     defaultValues: {
       propertyId: preselectedPropertyId || "",
-      tenantId: "",
+      tenantId: preselectedTenantId || "",
       startDate: new Date().toISOString().split("T")[0],
       endDate: "",
       monthlyRent: 0,
