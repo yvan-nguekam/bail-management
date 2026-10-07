@@ -79,6 +79,8 @@ enum NotificationType {
   LEASE_RENEWED
   LEASE_TERMINATED
   LEASE_EXPIRING
+  LEASE_EXPIRED
+  LEASE_ACTIVATED
   MAINTENANCE_REQUEST
   MAINTENANCE_UPDATE
   MESSAGE
@@ -169,6 +171,9 @@ model Lease {
   status LeaseStatus @default(DRAFT)
 
   paymentDay Int @default(1) // Day of month for rent payment
+
+  // Smallest "days before end" notice already sent (e.g. 60, then 30), null if none
+  lastExpiryNoticeDays Int?
 
   terms String? @db.Text
   notes String? @db.Text

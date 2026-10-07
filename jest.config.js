@@ -8,7 +8,8 @@ const customJestConfig = {
   setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
   testEnvironment: "jest-environment-jsdom",
   // Playwright e2e specs live in /tests and run with `pnpm test:e2e`
-  testPathIgnorePatterns: ["<rootDir>/node_modules/", "<rootDir>/tests/"],
+  testPathIgnorePatterns: ["<rootDir>/node_modules/", "<rootDir>/tests/", "<rootDir>/.claude/"],
+  modulePathIgnorePatterns: ["<rootDir>/.claude/"],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
   },

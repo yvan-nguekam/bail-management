@@ -11,6 +11,7 @@
     "test": "jest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "cron:lease-status": "node --env-file-if-exists=.env scripts/run-cron.mjs lease-status",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
