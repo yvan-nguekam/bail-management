@@ -27,6 +27,7 @@ import {
   Download,
 } from "lucide-react";
 import { PaymentScheduleTable } from "@/components/leases/payment-schedule-table";
+import { DepositCard } from "@/components/leases/deposit-card";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -506,6 +507,8 @@ export default function LeaseDetailsPage() {
           </Card>
         </div>
       </div>
+
+      <DepositCard leaseId={lease.id} leaseStatus={lease.status} />
 
       {/* Échéancier des loyers */}
       <Card>
