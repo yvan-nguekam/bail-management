@@ -110,6 +110,14 @@ export async function POST(
           endDate: endDate,
           monthlyRent: newMonthlyRent || lease.monthlyRent,
           securityDeposit: lease.securityDeposit,
+          // La caution encore détenue est reportée sur le nouveau bail
+          ...(lease.depositStatus === "HELD" && {
+            depositStatus: lease.depositStatus,
+            depositReceivedAmount: lease.depositReceivedAmount,
+            depositReceivedAt: lease.depositReceivedAt,
+            depositPaymentMethod: lease.depositPaymentMethod,
+            depositReference: lease.depositReference,
+          }),
           paymentDay: lease.paymentDay,
           terms: terms || `Renouvellement du bail #${lease.id}`,
           status: "ACTIVE",
@@ -132,6 +140,14 @@ export async function POST(
       });
 
       await syncLeaseSchedule(tx, newLease);
+
+      // Les éventuelles retenues sur caution suivent la caution
+      if (lease.depositStatus === "HELD") {
+        await tx.depositDeduction.updateMany({
+          where: { leaseId: id },
+          data: { leaseId: newLease.id },
+        });
+      }
 
       return newLease;
     });
