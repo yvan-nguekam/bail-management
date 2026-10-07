@@ -24,6 +24,7 @@ import {
   XCircle,
   AlertCircle,
   CalendarClock,
+  Download,
 } from "lucide-react";
 import { PaymentScheduleTable } from "@/components/leases/payment-schedule-table";
 import { formatCurrency } from "@/lib/utils";
@@ -276,6 +277,17 @@ export default function LeaseDetailsPage() {
     }
   };
 
+  const handleDownloadContract = async () => {
+    if (!lease) return;
+    try {
+      const { downloadLeaseContract } = await import("@/lib/lease-contract-pdf");
+      downloadLeaseContract(lease);
+    } catch (error) {
+      console.error("Erreur:", error);
+      toast.error("Erreur lors de la génération du contrat");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -316,6 +328,10 @@ export default function LeaseDetailsPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleDownloadContract}>
+            <Download className="mr-2 h-4 w-4" />
+            Télécharger le contrat
+          </Button>
           {lease.status === "ACTIVE" && (
             <>
               <Button
