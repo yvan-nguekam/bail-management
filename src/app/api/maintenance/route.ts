@@ -3,6 +3,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
+import {
+  MAINTENANCE_STATUSES,
+  canManageProperty,
+  isMaintenancePriority,
+  isMaintenanceStatus,
+} from "@/lib/maintenance";
 
 // Schema de validation pour une demande de maintenance
 const maintenanceSchema = z.object({
@@ -11,6 +18,9 @@ const maintenanceSchema = z.object({
   description: z.string().min(1, "La description est requise"),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
   category: z.string().optional(),
+  // Réservé aux propriétaires/gestionnaires/admins : locataire pour le compte duquel
+  // la demande est ouverte. Ignoré pour un locataire (toujours lui-même).
+  tenantId: z.string().min(1).optional(),
 });
 
 // GET /api/maintenance - Liste toutes les demandes de maintenance
@@ -34,30 +44,34 @@ export async function GET(request: NextRequest) {
 
     const skip = (page - 1) * limit;
 
-    // Construire les filtres selon le rôle
-    const where: any = {};
+    // Périmètre selon le rôle. Un intervenant assigné voit aussi les demandes
+    // qui lui sont confiées (cohérent avec GET /api/maintenance/[id]).
+    const scope: Prisma.MaintenanceRequestWhereInput = {};
 
     if (session.user.role === "LANDLORD") {
-      where.property = {
-        ownerId: session.user.id,
-      };
+      scope.OR = [
+        { property: { ownerId: session.user.id } },
+        { assignedToId: session.user.id },
+      ];
     } else if (session.user.role === "MANAGER") {
-      where.property = {
-        OR: [
-          { ownerId: session.user.id },
-          { managerId: session.user.id },
-        ],
-      };
+      scope.OR = [
+        { property: { ownerId: session.user.id } },
+        { property: { managerId: session.user.id } },
+        { assignedToId: session.user.id },
+      ];
     } else if (session.user.role === "TENANT") {
-      where.tenantId = session.user.id;
+      scope.tenantId = session.user.id;
     }
     // Les ADMIN voient tout
 
-    if (status) {
+    const where: Prisma.MaintenanceRequestWhereInput = { ...scope };
+
+    // Les valeurs invalides sont ignorées (sinon Prisma lève une erreur 500)
+    if (isMaintenanceStatus(status)) {
       where.status = status;
     }
 
-    if (priority) {
+    if (isMaintenancePriority(priority)) {
       where.priority = priority;
     }
 
@@ -65,7 +79,7 @@ export async function GET(request: NextRequest) {
       where.propertyId = propertyId;
     }
 
-    const [requests, total] = await Promise.all([
+    const [requests, total, statusGroups] = await Promise.all([
       prisma.maintenanceRequest.findMany({
         where,
         skip,
@@ -104,10 +118,24 @@ export async function GET(request: NextRequest) {
         },
       }),
       prisma.maintenanceRequest.count({ where }),
+      // Compteurs par statut sur tout le périmètre de l'utilisateur (hors filtres)
+      prisma.maintenanceRequest.groupBy({
+        by: ["status"],
+        where: scope,
+        _count: { _all: true },
+      }),
     ]);
+
+    const stats = Object.fromEntries(
+      MAINTENANCE_STATUSES.map((s) => [
+        s,
+        statusGroups.find((g) => g.status === s)?._count._all ?? 0,
+      ])
+    );
 
     return NextResponse.json({
       requests,
+      stats,
       pagination: {
         total,
         page,
@@ -125,6 +153,9 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/maintenance - Crée une nouvelle demande
+// - TENANT : sur une propriété où il a un bail actif, en son nom.
+// - LANDLORD / MANAGER : sur une propriété qu'ils possèdent ou gèrent (ADMIN : toutes),
+//   en leur nom ou pour le compte d'un locataire ayant un bail actif (champ tenantId).
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -137,15 +168,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const validatedData = maintenanceSchema.parse(body);
+    const { tenantId: requestedTenantId, ...requestData } =
+      maintenanceSchema.parse(body);
 
     // Vérifier que la propriété existe
     const property = await prisma.property.findUnique({
-      where: { id: validatedData.propertyId },
-      include: {
-        owner: true,
-        manager: true,
-      },
+      where: { id: requestData.propertyId },
+      select: { id: true, ownerId: true, managerId: true },
     });
 
     if (!property) {
@@ -155,11 +184,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Pour les locataires, vérifier qu'ils ont un bail actif sur cette propriété
+    // Demandeur enregistré dans le champ tenantId du modèle
+    let requesterId = session.user.id;
+
     if (session.user.role === "TENANT") {
+      // Un locataire doit avoir un bail actif sur cette propriété
       const activeLease = await prisma.lease.findFirst({
         where: {
-          propertyId: validatedData.propertyId,
+          propertyId: requestData.propertyId,
           tenantId: session.user.id,
           status: "ACTIVE",
         },
@@ -171,13 +203,39 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         );
       }
+    } else {
+      if (!canManageProperty(session.user, property)) {
+        return NextResponse.json(
+          { error: "Non autorisé pour cette propriété" },
+          { status: 403 }
+        );
+      }
+
+      // Pour le compte d'un locataire : il doit avoir un bail actif sur le bien
+      if (requestedTenantId && requestedTenantId !== session.user.id) {
+        const tenantLease = await prisma.lease.findFirst({
+          where: {
+            propertyId: requestData.propertyId,
+            tenantId: requestedTenantId,
+            status: "ACTIVE",
+          },
+        });
+
+        if (!tenantLease) {
+          return NextResponse.json(
+            { error: "Ce locataire n'a pas de bail actif sur cette propriété" },
+            { status: 400 }
+          );
+        }
+        requesterId = requestedTenantId;
+      }
     }
 
     const maintenanceRequest = await prisma.maintenanceRequest.create({
       data: {
-        ...validatedData,
-        tenantId: session.user.id,
-        priority: validatedData.priority || "MEDIUM",
+        ...requestData,
+        tenantId: requesterId,
+        priority: requestData.priority || "MEDIUM",
         status: "OPEN",
       },
       include: {
@@ -208,27 +266,24 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Créer une notification pour le propriétaire
-    await prisma.notification.create({
-      data: {
-        userId: property.ownerId,
-        type: "MAINTENANCE_REQUEST",
-        title: "Nouvelle demande de maintenance",
-        message: `${session.user.name} a créé une demande: ${maintenanceRequest.title}`,
-        relatedId: maintenanceRequest.id,
-      },
-    });
+    // Notifier le propriétaire, le gestionnaire et, si la demande a été ouverte
+    // pour son compte, le locataire — jamais l'auteur lui-même
+    const recipients = new Set(
+      [property.ownerId, property.managerId, requesterId].filter(
+        (id): id is string => !!id && id !== session.user.id
+      )
+    );
 
-    // Si un gestionnaire est assigné, lui envoyer aussi une notification
-    if (property.managerId) {
-      await prisma.notification.create({
-        data: {
-          userId: property.managerId,
-          type: "MAINTENANCE_REQUEST",
+    if (recipients.size > 0) {
+      await prisma.notification.createMany({
+        data: [...recipients].map((userId) => ({
+          userId,
+          type: "MAINTENANCE_REQUEST" as const,
           title: "Nouvelle demande de maintenance",
           message: `${session.user.name} a créé une demande: ${maintenanceRequest.title}`,
           relatedId: maintenanceRequest.id,
-        },
+          link: `/maintenance/${maintenanceRequest.id}`,
+        })),
       });
     }
 
