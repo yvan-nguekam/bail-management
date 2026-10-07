@@ -4,6 +4,13 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
+import {
+  canDeleteRequest,
+  canManageProperty,
+  canTransitionStatus,
+  computeResolvedAt,
+  maintenanceStatusLabels,
+} from "@/lib/maintenance";
 
 const updateMaintenanceSchema = z.object({
   title: z.string().min(1).optional(),
@@ -36,6 +43,9 @@ export async function GET(
         property: {
           include: {
             owner: {
+              select: { id: true, name: true, email: true },
+            },
+            manager: {
               select: { id: true, name: true, email: true },
             },
           },
@@ -102,17 +112,39 @@ export async function PUT(
       return NextResponse.json({ error: "Demande non trouvée" }, { status: 404 });
     }
 
-    const canEdit =
-      session.user.role === "ADMIN" ||
-      existing.property.ownerId === session.user.id ||
-      existing.property.managerId === session.user.id;
-
-    if (!canEdit) {
+    if (!canManageProperty(session.user, existing.property)) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 403 });
     }
 
     const body = await request.json();
     const validatedData = updateMaintenanceSchema.parse(body);
+
+    // Refuser les transitions de statut incohérentes (ex. CLOSED -> RESOLVED)
+    if (
+      validatedData.status &&
+      !canTransitionStatus(existing.status, validatedData.status)
+    ) {
+      return NextResponse.json(
+        {
+          error: `Transition impossible : ${maintenanceStatusLabels[existing.status]} → ${maintenanceStatusLabels[validatedData.status]}`,
+        },
+        { status: 400 }
+      );
+    }
+
+    // L'intervenant assigné doit exister et ne pas être un locataire
+    if (validatedData.assignedToId) {
+      const assignee = await prisma.user.findUnique({
+        where: { id: validatedData.assignedToId },
+        select: { role: true },
+      });
+      if (!assignee || assignee.role === "TENANT") {
+        return NextResponse.json(
+          { error: "Intervenant invalide" },
+          { status: 400 }
+        );
+      }
+    }
 
     const { scheduledDate, completedDate, ...rest } = validatedData;
     const updateData: Prisma.MaintenanceRequestUncheckedUpdateInput = { ...rest };
@@ -121,8 +153,9 @@ export async function PUT(
     }
     if (completedDate !== undefined) {
       updateData.resolvedAt = completedDate ? new Date(completedDate) : null;
-    } else if (rest.status === "RESOLVED" && !existing.resolvedAt) {
-      updateData.resolvedAt = new Date();
+    } else if (rest.status && rest.status !== existing.status) {
+      // Date de résolution posée à la résolution, effacée en cas de réouverture/annulation
+      updateData.resolvedAt = computeResolvedAt(rest.status, existing.resolvedAt);
     }
 
     const updated = await prisma.maintenanceRequest.update({
@@ -134,15 +167,38 @@ export async function PUT(
       },
     });
 
-    // Notification si changement de statut
-    if (validatedData.status && validatedData.status !== existing.status) {
+    // Notification au demandeur si changement de statut
+    if (
+      validatedData.status &&
+      validatedData.status !== existing.status &&
+      existing.tenantId !== session.user.id
+    ) {
       await prisma.notification.create({
         data: {
           userId: existing.tenantId,
           type: "MAINTENANCE_UPDATE",
           title: "Mise à jour demande de maintenance",
-          message: `Votre demande "${existing.title}" est maintenant: ${validatedData.status}`,
+          message: `Votre demande "${existing.title}" est maintenant : ${maintenanceStatusLabels[validatedData.status]}`,
           relatedId: updated.id,
+          link: `/maintenance/${updated.id}`,
+        },
+      });
+    }
+
+    // Notification au nouvel intervenant assigné
+    if (
+      validatedData.assignedToId &&
+      validatedData.assignedToId !== existing.assignedToId &&
+      validatedData.assignedToId !== session.user.id
+    ) {
+      await prisma.notification.create({
+        data: {
+          userId: validatedData.assignedToId,
+          type: "MAINTENANCE_UPDATE",
+          title: "Demande de maintenance assignée",
+          message: `La demande "${existing.title}" vous a été assignée`,
+          relatedId: updated.id,
+          link: `/maintenance/${updated.id}`,
         },
       });
     }
@@ -192,13 +248,18 @@ export async function DELETE(
       return NextResponse.json({ error: "Demande non trouvée" }, { status: 404 });
     }
 
-    const canDelete =
-      session.user.role === "ADMIN" ||
-      existing.property.ownerId === session.user.id ||
-      existing.tenantId === session.user.id;
-
-    if (!canDelete) {
-      return NextResponse.json({ error: "Non autorisé" }, { status: 403 });
+    // Admin / propriétaire / gestionnaire : toujours.
+    // Demandeur : seulement tant que la demande n'a pas été prise en charge (OPEN).
+    if (!canDeleteRequest(session.user, existing)) {
+      return NextResponse.json(
+        {
+          error:
+            existing.tenantId === session.user.id
+              ? "Une demande déjà prise en charge ne peut plus être supprimée"
+              : "Non autorisé",
+        },
+        { status: 403 }
+      );
     }
 
     await prisma.maintenanceRequest.delete({
