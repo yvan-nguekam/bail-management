@@ -5,8 +5,13 @@ import { useRouter, useParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -19,12 +24,16 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { ArrowLeft, Loader2, FileText } from "lucide-react";
+import { PageHeader } from "@/components/shared/page-header";
+import { PageSkeleton } from "@/components/shared/page-skeleton";
+import { statusLabel } from "@/components/shared/status-badge";
+import { FormActions } from "@/components/properties/form-actions";
 import { toast } from "sonner";
 
 const leaseSchema = z.object({
@@ -42,6 +51,8 @@ const leaseSchema = z.object({
 });
 
 type LeaseFormData = z.infer<typeof leaseSchema>;
+
+const leaseStatuses = ["DRAFT", "ACTIVE", "EXPIRED", "TERMINATED", "RENEWED"] as const;
 
 export default function EditLeasePage() {
   const params = useParams<{ id: string }>();
@@ -129,39 +140,27 @@ export default function EditLeasePage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton stats={0} />;
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-3xl font-bold">Modifier le bail</h1>
-          <p className="text-muted-foreground">
-            {propertyName} - {tenantName}
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Modifier le bail"
+        description={`${propertyName} · ${tenantName}`}
+        backHref={`/leases/${params.id}`}
+      />
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           {/* Période du bail */}
-          <Card>
+          <Card className="animate-fade-up" style={{ "--stagger": 1 } as React.CSSProperties}>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Période du bail
-              </CardTitle>
+              <CardTitle>Période et statut</CardTitle>
+              <CardDescription>La date de fin est incluse dans la location.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
                 <FormField
                   control={form.control}
                   name="startDate"
@@ -189,42 +188,46 @@ export default function EditLeasePage() {
                     </FormItem>
                   )}
                 />
-              </div>
 
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Statut</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un statut" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="DRAFT">Brouillon</SelectItem>
-                        <SelectItem value="ACTIVE">Actif</SelectItem>
-                        <SelectItem value="EXPIRED">Expiré</SelectItem>
-                        <SelectItem value="TERMINATED">Résilié</SelectItem>
-                        <SelectItem value="RENEWED">Renouvelé</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Statut</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Sélectionner un statut" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {leaseStatuses.map((value) => (
+                            <SelectItem key={value} value={value}>
+                              {statusLabel("lease", value)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </CardContent>
           </Card>
 
           {/* Informations financières */}
-          <Card>
+          <Card className="animate-fade-up" style={{ "--stagger": 2 } as React.CSSProperties}>
             <CardHeader>
               <CardTitle>Informations financières</CardTitle>
+              <CardDescription>
+                Modifier les dates, le loyer ou le jour de paiement recalcule les échéances non
+                payées. Les échéances déjà payées ou annulées ne sont pas modifiées.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-3">
@@ -265,22 +268,20 @@ export default function EditLeasePage() {
                       <FormControl>
                         <Input type="number" min="1" max="31" {...field} value={field.value as number} />
                       </FormControl>
+                      <FormDescription>Jour du mois où le loyer est dû</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
-              <p className="text-sm text-muted-foreground">
-                Modifier les dates, le loyer ou le jour de paiement recalcule les échéances non
-                payées. Les échéances déjà payées ou annulées ne sont pas modifiées.
-              </p>
             </CardContent>
           </Card>
 
           {/* Conditions du bail */}
-          <Card>
+          <Card className="animate-fade-up" style={{ "--stagger": 3 } as React.CSSProperties}>
             <CardHeader>
               <CardTitle>Conditions du bail</CardTitle>
+              <CardDescription>Clauses particulières reprises dans le contrat.</CardDescription>
             </CardHeader>
             <CardContent>
               <FormField
@@ -291,7 +292,7 @@ export default function EditLeasePage() {
                     <FormLabel>Termes et conditions</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Décrivez les conditions du bail..."
+                        placeholder="Décrivez les conditions du bail…"
                         className="min-h-[150px]"
                         {...field}
                       />
@@ -303,22 +304,11 @@ export default function EditLeasePage() {
             </CardContent>
           </Card>
 
-          <div className="flex gap-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.back()}
-              disabled={isSubmitting}
-            >
-              Annuler
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              Enregistrer les modifications
-            </Button>
-          </div>
+          <FormActions
+            submitLabel="Enregistrer les modifications"
+            isSubmitting={isSubmitting}
+            onCancel={() => router.back()}
+          />
         </form>
       </Form>
     </div>

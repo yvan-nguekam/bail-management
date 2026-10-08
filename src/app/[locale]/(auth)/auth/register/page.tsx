@@ -6,9 +6,9 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Building2, Loader2 } from "lucide-react"
+import { AuthShell } from "@/components/auth/auth-shell"
+import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 type RegisterRole = "TENANT" | "LANDLORD" | "MANAGER"
@@ -29,12 +29,12 @@ export default function RegisterPage() {
     e.preventDefault()
 
     if (formData.password !== formData.confirmPassword) {
-      toast.error("Passwords do not match")
+      toast.error("Les mots de passe ne correspondent pas")
       return
     }
 
     if (formData.password.length < 8) {
-      toast.error("Password must be at least 8 characters")
+      toast.error("Le mot de passe doit contenir au moins 8 caractères")
       return
     }
 
@@ -58,141 +58,135 @@ export default function RegisterPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        toast.error(data.error || "Something went wrong")
+        toast.error(data.error || "Une erreur est survenue")
         return
       }
 
-      toast.success("Account created successfully!")
+      toast.success("Compte créé avec succès !")
       router.push("/auth/login")
-    } catch (error) {
-      toast.error("Something went wrong")
+    } catch {
+      toast.error("Une erreur est survenue")
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
-      <Card className="w-full max-w-md shadow-xl">
-        <CardHeader className="space-y-1 text-center">
-          <div className="flex justify-center mb-4">
-            <div className="rounded-full bg-primary p-3">
-              <Building2 className="h-8 w-8 text-primary-foreground" />
-            </div>
-          </div>
-          <CardTitle className="text-3xl font-bold">Create Account</CardTitle>
-          <CardDescription className="text-base">
-            Sign up to start managing your properties
-          </CardDescription>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <Input
-                id="name"
-                type="text"
-                placeholder="John Doe"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                required
-                disabled={isLoading}
-                className="h-11"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                required
-                disabled={isLoading}
-                className="h-11"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number (Optional)</Label>
-              <Input
-                id="phone"
-                type="tel"
-                placeholder="+33 6 12 34 56 78"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                disabled={isLoading}
-                className="h-11"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="role">I am a</Label>
-              <Select
-                value={formData.role}
-                onValueChange={(value) => setFormData({ ...formData, role: value as RegisterRole })}
-                disabled={isLoading}
-              >
-                <SelectTrigger className="h-11">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="TENANT">Tenant (Locataire)</SelectItem>
-                  <SelectItem value="LANDLORD">Landlord (Bailleur)</SelectItem>
-                  <SelectItem value="MANAGER">Property Manager (Gestionnaire)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                required
-                disabled={isLoading}
-                className="h-11"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="••••••••"
-                value={formData.confirmPassword}
-                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                required
-                disabled={isLoading}
-                className="h-11"
-              />
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col space-y-4">
-            <Button
-              type="submit"
-              className="w-full h-11 text-base"
+    <AuthShell
+      title="Créer un compte"
+      description="Commencez à gérer vos biens en quelques minutes."
+      footer={
+        <>
+          Vous avez déjà un compte ?{" "}
+          <Link href="/auth/login" className="font-medium text-primary hover:underline">
+            Se connecter
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-5" aria-busy={isLoading}>
+        <div className="space-y-2">
+          <Label htmlFor="name">Nom complet</Label>
+          <Input
+            id="name"
+            type="text"
+            autoComplete="name"
+            placeholder="Jean Dupont"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            required
+            disabled={isLoading}
+            className="h-11"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="email">Adresse e-mail</Label>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            placeholder="vous@exemple.com"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            required
+            disabled={isLoading}
+            className="h-11"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="phone">
+            Téléphone <span className="font-normal text-muted-foreground">(facultatif)</span>
+          </Label>
+          <Input
+            id="phone"
+            type="tel"
+            autoComplete="tel"
+            placeholder="+237 6 12 34 56 78"
+            value={formData.phone}
+            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            disabled={isLoading}
+            className="h-11"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="role">Je suis</Label>
+          <Select
+            value={formData.role}
+            onValueChange={(value) => setFormData({ ...formData, role: value as RegisterRole })}
+            disabled={isLoading}
+          >
+            <SelectTrigger id="role" className="h-11 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="TENANT">Locataire</SelectItem>
+              <SelectItem value="LANDLORD">Propriétaire (bailleur)</SelectItem>
+              <SelectItem value="MANAGER">Gestionnaire de biens</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="password">Mot de passe</Label>
+            <Input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="••••••••"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              required
               disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating account...
-                </>
-              ) : (
-                "Create Account"
-              )}
-            </Button>
-            <p className="text-center text-sm text-muted-foreground">
-              Already have an account?{" "}
-              <Link href="/auth/login" className="font-medium text-primary hover:underline">
-                Sign in
-              </Link>
-            </p>
-          </CardFooter>
-        </form>
-      </Card>
-    </div>
+              className="h-11"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">Confirmation</Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              autoComplete="new-password"
+              placeholder="••••••••"
+              value={formData.confirmPassword}
+              onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+              required
+              disabled={isLoading}
+              className="h-11"
+            />
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">Au moins 8 caractères.</p>
+        <Button type="submit" className="h-11 w-full" disabled={isLoading}>
+          {isLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              Création du compte…
+            </>
+          ) : (
+            "Créer mon compte"
+          )}
+        </Button>
+      </form>
+    </AuthShell>
   )
 }

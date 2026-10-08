@@ -3,9 +3,15 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,6 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { PageHeader } from "@/components/shared/page-header";
 import {
   MaintenancePriorityBadge,
   MaintenanceStatusBadge,
@@ -24,38 +31,83 @@ import { CommentThread } from "@/components/maintenance/comment-thread";
 import { ManageRequestCard } from "@/components/maintenance/manage-request-card";
 import type { MaintenanceDetail, UserSummary } from "@/components/maintenance/types";
 import { canDeleteRequest, canManageProperty } from "@/lib/maintenance";
-import { formatCurrency } from "@/lib/utils";
-import { ArrowLeft, Building2, Loader2, Trash2, Users, Wrench } from "lucide-react";
+import { cn, formatCurrency } from "@/lib/utils";
+import {
+  Building2,
+  CalendarClock,
+  CheckCircle2,
+  FileText,
+  Info,
+  Loader2,
+  Trash2,
+  User,
+  UserCog,
+  Wallet,
+} from "lucide-react";
 import { toast } from "sonner";
 
 function formatDate(value: string | null) {
   return value ? new Date(value).toLocaleDateString("fr-FR") : "—";
 }
 
-function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+function InfoRow({
+  label,
+  value,
+  hint,
+  icon: Icon,
+}: {
+  label: string;
+  value: React.ReactNode;
+  hint?: React.ReactNode;
+  icon?: React.ComponentType<{ className?: string }>;
+}) {
   return (
-    <div>
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="font-medium">{value}</p>
+    <div className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+      {Icon && (
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+          <Icon className="h-4 w-4 text-muted-foreground" aria-hidden />
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+        <div className="mt-0.5 text-sm font-medium break-words">{value}</div>
+        {hint && <div className="text-xs text-muted-foreground break-words">{hint}</div>}
+      </div>
     </div>
   );
 }
 
-function PersonRow({ label, person }: { label: string; person: UserSummary | null }) {
+function PersonValue({ person }: { person: UserSummary | null }) {
+  if (!person) return <span className="text-muted-foreground">Non assigné</span>;
   return (
-    <div>
-      <p className="text-sm text-muted-foreground">{label}</p>
-      {person ? (
-        <>
-          <p className="font-medium">{person.name}</p>
-          <p className="text-sm text-muted-foreground">{person.email}</p>
-          {person.phone && (
-            <p className="text-sm text-muted-foreground">{person.phone}</p>
-          )}
-        </>
-      ) : (
-        <p className="font-medium">—</p>
-      )}
+    <>
+      <span>{person.name}</span>
+      <span className="block text-xs font-normal text-muted-foreground">
+        {person.email}
+        {person.phone ? ` · ${person.phone}` : ""}
+      </span>
+    </>
+  );
+}
+
+function DetailSkeleton() {
+  return (
+    <div className="animate-fade-in space-y-6" aria-busy="true" aria-live="polite">
+      <div className="space-y-2">
+        <Skeleton className="h-8 w-72 max-w-full" />
+        <Skeleton className="h-5 w-48" />
+      </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <Skeleton className="h-48 rounded-xl" />
+          <Skeleton className="h-72 rounded-xl" />
+        </div>
+        <div className="space-y-6">
+          <Skeleton className="h-96 rounded-xl" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -112,11 +164,7 @@ export default function MaintenanceDetailPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <DetailSkeleton />;
   }
 
   if (!request) {
@@ -129,72 +177,39 @@ export default function MaintenanceDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push("/maintenance")}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold">{request.title}</h1>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <MaintenanceStatusBadge status={request.status} />
-              <MaintenancePriorityBadge priority={request.priority} />
-              <span className="text-sm text-muted-foreground">
-                Créée le {formatDate(request.createdAt)}
-              </span>
-            </div>
-          </div>
-        </div>
-        {canDelete && (
-          <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
-            <Trash2 className="mr-2 h-4 w-4" />
-            Supprimer
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title={request.title}
+        backHref="/maintenance"
+        actions={
+          canDelete ? (
+            <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
+              <Trash2 className="h-4 w-4" aria-hidden />
+              Supprimer
+            </Button>
+          ) : undefined
+        }
+      >
+        <MaintenanceStatusBadge status={request.status} />
+        <MaintenancePriorityBadge priority={request.priority} />
+        {request.category && <Badge variant="outline">{request.category}</Badge>}
+        <span className="text-sm text-muted-foreground">
+          Créée le {formatDate(request.createdAt)}
+        </span>
+      </PageHeader>
 
-      <div className="grid gap-6 md:grid-cols-3">
-        <div className="space-y-6 md:col-span-2">
-          <Card>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <Card className="animate-fade-up" style={{ "--stagger": 1 } as React.CSSProperties}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Wrench className="h-5 w-5" />
-                Détails de la demande
+                <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />
+                Description
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <p className="whitespace-pre-wrap">{request.description}</p>
-
-              <Separator />
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <InfoRow
-                  label="Propriété"
-                  value={
-                    <span className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-muted-foreground" />
-                      {request.property.name}
-                    </span>
-                  }
-                />
-                <InfoRow
-                  label="Adresse"
-                  value={`${request.property.address}, ${request.property.city}`}
-                />
-                <InfoRow label="Catégorie" value={request.category || "Non précisée"} />
-                <InfoRow
-                  label="Intervention prévue le"
-                  value={formatDate(request.scheduledDate)}
-                />
-                <InfoRow
-                  label="Coût"
-                  value={request.cost != null ? formatCurrency(request.cost) : "—"}
-                />
-                <InfoRow label="Dernière mise à jour" value={formatDate(request.updatedAt)} />
-                {request.resolvedAt && (
-                  <InfoRow label="Résolue le" value={formatDate(request.resolvedAt)} />
-                )}
-              </div>
+            <CardContent>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                {request.description}
+              </p>
             </CardContent>
           </Card>
 
@@ -215,24 +230,70 @@ export default function MaintenanceDetailPage() {
             />
           )}
 
-          <Card>
+          <Card
+            className="animate-fade-up"
+            style={{ "--stagger": canManage ? 4 : 3 } as React.CSSProperties}
+          >
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Intervenants
+                <Info className="h-4 w-4 text-muted-foreground" aria-hidden />
+                Informations
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <PersonRow label="Demandeur" person={request.tenant} />
-              <Separator />
-              <PersonRow label="Intervenant assigné" person={request.assignedTo} />
-              <Separator />
-              <PersonRow label="Propriétaire" person={request.property.owner} />
+            <CardContent className="divide-y">
+              <InfoRow
+                icon={Building2}
+                label="Bien"
+                value={request.property.name}
+                hint={`${request.property.address}, ${request.property.city}`}
+              />
+              <InfoRow
+                icon={User}
+                label="Demandeur"
+                value={<PersonValue person={request.tenant} />}
+              />
+              <InfoRow
+                icon={UserCog}
+                label="Intervenant"
+                value={<PersonValue person={request.assignedTo} />}
+              />
+              <InfoRow
+                icon={CalendarClock}
+                label="Intervention prévue le"
+                value={
+                  <span className={cn("tabular-nums", !request.scheduledDate && "text-muted-foreground")}>
+                    {request.scheduledDate ? formatDate(request.scheduledDate) : "Non planifiée"}
+                  </span>
+                }
+                hint={`Dernière mise à jour le ${formatDate(request.updatedAt)}`}
+              />
+              <InfoRow
+                icon={Wallet}
+                label="Coût"
+                value={
+                  request.cost != null ? (
+                    <span className="tabular-nums">{formatCurrency(request.cost)}</span>
+                  ) : (
+                    <span className="text-muted-foreground">Non renseigné</span>
+                  )
+                }
+              />
+              {request.resolvedAt && (
+                <InfoRow
+                  icon={CheckCircle2}
+                  label="Résolue le"
+                  value={<span className="tabular-nums">{formatDate(request.resolvedAt)}</span>}
+                />
+              )}
+              <InfoRow
+                label="Propriétaire"
+                value={<PersonValue person={request.property.owner} />}
+              />
               {request.property.manager && (
-                <>
-                  <Separator />
-                  <PersonRow label="Gestionnaire" person={request.property.manager} />
-                </>
+                <InfoRow
+                  label="Gestionnaire"
+                  value={<PersonValue person={request.property.manager} />}
+                />
               )}
             </CardContent>
           </Card>
@@ -256,9 +317,9 @@ export default function MaintenanceDetailPage() {
                 handleDelete();
               }}
               disabled={isDeleting}
-              className="bg-destructive text-white hover:bg-destructive/90"
+              className={buttonVariants({ variant: "destructive" })}
             >
-              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isDeleting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
               Supprimer
             </AlertDialogAction>
           </AlertDialogFooter>

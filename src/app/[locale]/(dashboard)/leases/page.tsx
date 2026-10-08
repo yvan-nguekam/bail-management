@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -21,16 +21,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PageHeader } from "@/components/shared/page-header";
+import { EmptyState } from "@/components/shared/empty-state";
+import { TableSkeleton } from "@/components/shared/page-skeleton";
+import { StatusBadge, statusLabel } from "@/components/shared/status-badge";
+import { StatCard } from "@/components/dashboard/stat-card";
+import { ListPagination } from "@/components/properties/list-pagination";
+import { formatDay } from "@/components/properties/property-labels";
+import { formatCurrency, cn } from "@/lib/utils";
 import {
   FileText,
   Plus,
   Search,
-  Eye,
-  Loader2,
-  Calendar,
-  DollarSign,
-  Building2,
-  User,
+  SearchX,
+  ChevronRight,
+  FileCheck2,
+  FilePen,
+  CalendarX2,
 } from "lucide-react";
 
 interface Lease {
@@ -64,24 +71,24 @@ interface PaginationData {
   totalPages: number;
 }
 
-const statusLabels: Record<string, string> = {
-  DRAFT: "Brouillon",
-  ACTIVE: "Actif",
-  EXPIRED: "Expiré",
-  TERMINATED: "Résilié",
-  RENEWED: "Renouvelé",
-};
+interface LeaseStats {
+  total: number;
+  active: number;
+  draft: number;
+  expired: number;
+}
 
-const statusColors: Record<
-  string,
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  DRAFT: "outline",
-  ACTIVE: "default",
-  EXPIRED: "destructive",
-  TERMINATED: "secondary",
-  RENEWED: "secondary",
-};
+const leaseStatuses = ["DRAFT", "ACTIVE", "EXPIRED", "TERMINATED", "RENEWED"] as const;
+
+// Compte les baux d'un statut via la pagination de l'API (requête minimale)
+async function countLeases(status?: string) {
+  const params = new URLSearchParams({ page: "1", limit: "1" });
+  if (status) params.append("status", status);
+  const response = await fetch(`/api/leases?${params}`);
+  if (!response.ok) return 0;
+  const data = await response.json();
+  return (data.pagination?.total as number) ?? 0;
+}
 
 export default function LeasesPage() {
   const router = useRouter();
@@ -93,6 +100,7 @@ export default function LeasesPage() {
     totalPages: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<LeaseStats | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
@@ -124,9 +132,27 @@ export default function LeasesPage() {
     }
   };
 
+  const fetchStats = async () => {
+    try {
+      const [total, active, draft, expired] = await Promise.all([
+        countLeases(),
+        countLeases("ACTIVE"),
+        countLeases("DRAFT"),
+        countLeases("EXPIRED"),
+      ]);
+      setStats({ total, active, draft, expired });
+    } catch (error) {
+      console.error("Erreur:", error);
+    }
+  };
+
   useEffect(() => {
     fetchLeases();
   }, [pagination.page, statusFilter]);
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
 
   const filteredLeases = leases.filter(
     (lease) =>
@@ -142,89 +168,132 @@ export default function LeasesPage() {
     return days;
   };
 
+  const hasFilters = searchTerm !== "" || statusFilter !== "all";
+
+  const resetFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+  };
+
+  const createAction = (
+    <Button asChild>
+      <Link href="/leases/new">
+        <Plus aria-hidden />
+        Nouveau bail
+      </Link>
+    </Button>
+  );
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Baux</h1>
-          <p className="text-muted-foreground">
-            Gérez les contrats de location
-          </p>
-        </div>
-        <Button onClick={() => router.push("/leases/new")}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nouveau bail
-        </Button>
+      <PageHeader
+        title="Baux"
+        description="Suivez vos contrats de location et leurs échéances."
+        actions={createAction}
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard title="Total des baux" value={stats?.total ?? "—"} icon={FileText} index={0} />
+        <StatCard
+          title="Actifs"
+          value={stats?.active ?? "—"}
+          icon={FileCheck2}
+          tone="success"
+          index={1}
+        />
+        <StatCard
+          title="Brouillons"
+          value={stats?.draft ?? "—"}
+          icon={FilePen}
+          index={2}
+        />
+        <StatCard
+          title="Expirés"
+          value={stats?.expired ?? "—"}
+          icon={CalendarX2}
+          tone="warning"
+          index={3}
+        />
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Liste des baux ({pagination.total})
-            </CardTitle>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Rechercher..."
-                  className="pl-8 w-full sm:w-[250px]"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-[150px]">
-                  <SelectValue placeholder="Statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les statuts</SelectItem>
-                  {Object.entries(statusLabels).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
+      {/* Barre d'outils : recherche + filtre */}
+      <div
+        className="animate-fade-up flex flex-col gap-2 sm:flex-row sm:items-center"
+        style={{ "--stagger": 4 } as React.CSSProperties}
+      >
+        <div className="relative flex-1">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            type="search"
+            placeholder="Rechercher un bien, un locataire, une ville…"
+            aria-label="Rechercher un bail"
+            className="h-10 bg-card pl-9 sm:h-9"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger
+            className="h-10 w-full bg-card sm:h-9 sm:w-[170px]"
+            aria-label="Filtrer par statut"
+          >
+            <SelectValue placeholder="Statut" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous les statuts</SelectItem>
+            {leaseStatuses.map((value) => (
+              <SelectItem key={value} value={value}>
+                {statusLabel("lease", value)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <Card className="animate-fade-up" style={{ "--stagger": 5 } as React.CSSProperties}>
+        <CardContent className="space-y-4">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
+            <TableSkeleton rows={6} />
           ) : filteredLeases.length === 0 ? (
-            <div className="text-center py-12">
-              <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
-              <h3 className="mt-4 text-lg font-semibold">
-                Aucun bail trouvé
-              </h3>
-              <p className="text-muted-foreground">
-                Commencez par créer votre premier bail
-              </p>
-              <Button
-                onClick={() => router.push("/leases/new")}
-                className="mt-4"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Nouveau bail
-              </Button>
-            </div>
+            hasFilters ? (
+              <EmptyState
+                icon={SearchX}
+                title="Aucun bail ne correspond"
+                description="Essayez un autre terme de recherche ou réinitialisez les filtres."
+                action={
+                  <Button variant="outline" onClick={resetFilters}>
+                    Réinitialiser les filtres
+                  </Button>
+                }
+                className="border-0 py-10"
+              />
+            ) : (
+              <EmptyState
+                icon={FileText}
+                title="Aucun bail pour le moment"
+                description="Créez votre premier contrat de location pour suivre loyers et échéances."
+                action={createAction}
+                className="border-0 py-10"
+              />
+            )
           ) : (
             <>
-              <div className="rounded-md border">
+              <div className="overflow-hidden rounded-lg border">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Propriété</TableHead>
+                    <TableRow className="bg-muted/40 hover:bg-muted/40">
+                      <TableHead className="pl-4">Bien</TableHead>
                       <TableHead>Locataire</TableHead>
                       <TableHead>Période</TableHead>
-                      <TableHead>Loyer</TableHead>
+                      <TableHead className="text-right">Loyer</TableHead>
                       <TableHead>Statut</TableHead>
-                      <TableHead>Expiration</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>Échéance</TableHead>
+                      <TableHead className="w-12 pr-4">
+                        <span className="sr-only">Ouvrir</span>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -236,89 +305,68 @@ export default function LeasesPage() {
                         daysUntilExpiry <= 30;
 
                       return (
-                        <TableRow key={lease.id}>
-                          <TableCell>
-                            <div>
-                              <div className="font-medium flex items-center gap-2">
-                                <Building2 className="h-3 w-3 text-muted-foreground" />
-                                {lease.property.name}
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                {lease.property.city}
-                              </div>
+                        <TableRow
+                          key={lease.id}
+                          className="cursor-pointer"
+                          onClick={() => router.push(`/leases/${lease.id}`)}
+                        >
+                          <TableCell className="py-3 pl-4">
+                            <div className="font-medium">{lease.property.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {lease.property.city}
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <User className="h-3 w-3 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {lease.tenant.name}
-                                </div>
-                                <div className="text-sm text-muted-foreground">
-                                  {lease.tenant.email}
-                                </div>
-                              </div>
+                          <TableCell className="py-3">
+                            <div className="font-medium">{lease.tenant.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {lease.tenant.email}
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1 text-sm">
-                              <Calendar className="h-3 w-3 text-muted-foreground" />
-                              <div>
-                                <div>
-                                  {new Date(
-                                    lease.startDate
-                                  ).toLocaleDateString("fr-FR")}
-                                </div>
-                                <div className="text-muted-foreground">
-                                  au{" "}
-                                  {new Date(lease.endDate).toLocaleDateString(
-                                    "fr-FR"
+                          <TableCell className="py-3 tabular-nums">
+                            <div>{formatDay(lease.startDate)}</div>
+                            <div className="text-xs text-muted-foreground">
+                              au {formatDay(lease.endDate)}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3 text-right font-semibold tabular-nums">
+                            {formatCurrency(lease.monthlyRent)}
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <StatusBadge kind="lease" status={lease.status} />
+                          </TableCell>
+                          <TableCell className="py-3 text-sm tabular-nums">
+                            {lease.status === "ACTIVE" ? (
+                              daysUntilExpiry > 0 ? (
+                                <span
+                                  className={cn(
+                                    isExpiringSoon
+                                      ? "font-medium text-warning"
+                                      : "text-muted-foreground"
                                   )}
-                                </div>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1 font-semibold">
-                              <DollarSign className="h-3 w-3 text-green-600" />
-                              {lease.monthlyRent.toLocaleString()} FCFA
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={statusColors[lease.status]}>
-                              {statusLabels[lease.status]}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {lease.status === "ACTIVE" && (
-                              <div className="text-sm">
-                                {daysUntilExpiry > 0 ? (
-                                  <span
-                                    className={
-                                      isExpiringSoon
-                                        ? "text-orange-600 font-medium"
-                                        : "text-muted-foreground"
-                                    }
-                                  >
-                                    {daysUntilExpiry} jour
-                                    {daysUntilExpiry > 1 ? "s" : ""}
-                                  </span>
-                                ) : (
-                                  <span className="text-destructive font-medium">
-                                    Expiré
-                                  </span>
-                                )}
-                              </div>
+                                >
+                                  {daysUntilExpiry} jour{daysUntilExpiry > 1 ? "s" : ""}
+                                </span>
+                              ) : (
+                                <span className="font-medium text-destructive">Dépassée</span>
+                              )
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="py-3 pr-4 text-right">
                             <Button
                               variant="ghost"
-                              size="sm"
-                              onClick={() => router.push(`/leases/${lease.id}`)}
+                              size="icon"
+                              className="text-muted-foreground"
+                              asChild
                             >
-                              <Eye className="h-4 w-4" />
+                              <Link
+                                href={`/leases/${lease.id}`}
+                                aria-label={`Ouvrir le bail de ${lease.tenant.name}`}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <ChevronRight />
+                              </Link>
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -328,41 +376,13 @@ export default function LeasesPage() {
                 </Table>
               </div>
 
-              {pagination.totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Page {pagination.page} sur {pagination.totalPages}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setPagination((prev) => ({
-                          ...prev,
-                          page: prev.page - 1,
-                        }))
-                      }
-                      disabled={pagination.page === 1}
-                    >
-                      Précédent
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setPagination((prev) => ({
-                          ...prev,
-                          page: prev.page + 1,
-                        }))
-                      }
-                      disabled={pagination.page === pagination.totalPages}
-                    >
-                      Suivant
-                    </Button>
-                  </div>
-                </div>
-              )}
+              <ListPagination
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                total={pagination.total}
+                itemLabels={["bail", "baux"]}
+                onPageChange={(page) => setPagination((prev) => ({ ...prev, page }))}
+              />
             </>
           )}
         </CardContent>

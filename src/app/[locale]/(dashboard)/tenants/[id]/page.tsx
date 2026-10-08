@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Table,
   TableBody,
@@ -16,16 +14,24 @@ import {
 } from "@/components/ui/table";
 import {
   ArrowLeft,
-  Loader2,
   Mail,
   Phone,
   Plus,
   FileText,
-  Eye,
-  Building2,
+  ChevronRight,
   Receipt,
+  CheckCircle2,
+  AlertCircle,
+  CalendarClock,
+  UserX,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, cn } from "@/lib/utils";
+import { PageHeader } from "@/components/shared/page-header";
+import { StatusBadge } from "@/components/shared/status-badge";
+import { EmptyState } from "@/components/shared/empty-state";
+import { StatCard } from "@/components/dashboard/stat-card";
+import { TenantAvatar } from "@/components/tenants/tenant-avatar";
+import { TenantDetailsSkeleton } from "@/components/tenants/tenant-details-skeleton";
 
 interface Payment {
   id: string;
@@ -64,36 +70,6 @@ interface TenantDetails {
   };
 }
 
-const leaseStatusLabels: Record<string, string> = {
-  DRAFT: "Brouillon",
-  ACTIVE: "Actif",
-  EXPIRED: "Expiré",
-  TERMINATED: "Résilié",
-  RENEWED: "Renouvelé",
-};
-
-const leaseStatusColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  DRAFT: "outline",
-  ACTIVE: "default",
-  EXPIRED: "destructive",
-  TERMINATED: "secondary",
-  RENEWED: "secondary",
-};
-
-const paymentStatusLabels: Record<string, string> = {
-  PENDING: "En attente",
-  PAID: "Payé",
-  OVERDUE: "En retard",
-  CANCELLED: "Annulé",
-};
-
-const paymentStatusColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  PENDING: "outline",
-  PAID: "default",
-  OVERDUE: "destructive",
-  CANCELLED: "secondary",
-};
-
 const RECENT_PAYMENTS_LIMIT = 10;
 
 const formatDate = (date: string) =>
@@ -106,13 +82,7 @@ const formatPeriod = (date: string) =>
     timeZone: "UTC",
   });
 
-const initials = (name: string) =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
+const tableClass = "[&_td]:px-3 [&_td]:py-3 [&_th]:px-3";
 
 export default function TenantDetailsPage() {
   const router = useRouter();
@@ -150,25 +120,22 @@ export default function TenantDetailsPage() {
   }, [id]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <TenantDetailsSkeleton />;
   }
 
   if (notFound || !data) {
     return (
-      <div className="text-center py-12">
-        <h3 className="text-lg font-semibold">Locataire introuvable</h3>
-        <p className="text-muted-foreground">
-          Ce locataire n&apos;existe pas ou n&apos;a aucun bail sur vos biens.
-        </p>
-        <Button className="mt-4" variant="outline" onClick={() => router.push("/tenants")}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Retour aux locataires
-        </Button>
-      </div>
+      <EmptyState
+        icon={UserX}
+        title="Locataire introuvable"
+        description="Ce locataire n'existe pas ou n'a aucun bail sur vos biens."
+        action={
+          <Button variant="outline" onClick={() => router.push("/tenants")}>
+            <ArrowLeft className="h-4 w-4" aria-hidden />
+            Retour aux locataires
+          </Button>
+        }
+      />
     );
   }
 
@@ -184,225 +151,242 @@ export default function TenantDetailsPage() {
     .sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime())
     .slice(0, RECENT_PAYMENTS_LIMIT);
 
+  const activeLeaseCount = tenant.leases.filter((l) => l.status === "ACTIVE").length;
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push("/tenants")}>
-            <ArrowLeft className="h-4 w-4" />
+      <PageHeader
+        title={tenant.name}
+        description={`Locataire depuis le ${formatDate(tenant.createdAt)}`}
+        backHref="/tenants"
+        actions={
+          <Button onClick={() => router.push(`/leases/new?tenantId=${tenant.id}`)}>
+            <Plus className="h-4 w-4" aria-hidden />
+            Nouveau bail
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold">{tenant.name}</h1>
-            <p className="text-muted-foreground">
-              Compte créé le {formatDate(tenant.createdAt)}
-            </p>
-          </div>
-        </div>
-        <Button onClick={() => router.push(`/leases/new?tenantId=${tenant.id}`)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nouveau bail
-        </Button>
-      </div>
+        }
+      />
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Contact</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex items-center gap-3">
-              <Avatar>
-                {tenant.avatar && <AvatarImage src={tenant.avatar} alt={tenant.name} />}
-                <AvatarFallback>{initials(tenant.name)}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 space-y-1 text-sm">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card
+          className="animate-fade-up gap-0 py-5 sm:col-span-2 lg:col-span-1"
+          style={{ "--stagger": 0 } as React.CSSProperties}
+        >
+          <CardContent className="flex items-center gap-4 px-5">
+            <TenantAvatar name={tenant.name} src={tenant.avatar} size="lg" />
+            <div className="min-w-0 space-y-1 text-sm">
+              <p className="truncate font-medium">{tenant.name}</p>
+              <a
+                href={`mailto:${tenant.email}`}
+                className="flex items-center gap-1.5 truncate text-muted-foreground hover:text-foreground hover:underline"
+              >
+                <Mail className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span className="truncate">{tenant.email}</span>
+              </a>
+              {tenant.phone ? (
                 <a
-                  href={`mailto:${tenant.email}`}
-                  className="flex items-center gap-1 truncate hover:underline"
+                  href={`tel:${tenant.phone}`}
+                  className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground hover:underline"
                 >
-                  <Mail className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  {tenant.email}
+                  <Phone className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {tenant.phone}
                 </a>
-                {tenant.phone ? (
-                  <a
-                    href={`tel:${tenant.phone}`}
-                    className="flex items-center gap-1 hover:underline"
-                  >
-                    <Phone className="h-3 w-3 shrink-0 text-muted-foreground" />
-                    {tenant.phone}
-                  </a>
-                ) : (
-                  <span className="text-muted-foreground">Pas de téléphone</span>
-                )}
-              </div>
+              ) : (
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <Phone className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  Pas de téléphone
+                </span>
+              )}
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total payé</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(summary.totalPaid)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Impayés</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div
-              className={`text-2xl font-bold ${summary.overdueAmount > 0 ? "text-destructive" : ""}`}
-            >
-              {formatCurrency(summary.overdueAmount)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {summary.overdueCount > 0
-                ? `${summary.overdueCount} échéance${summary.overdueCount > 1 ? "s" : ""} en retard`
-                : "À jour"}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Prochaine échéance</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {summary.nextDuePayment ? (
-              <>
-                <div className="text-2xl font-bold">
-                  {formatCurrency(summary.nextDuePayment.amount)}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Le {formatDate(summary.nextDuePayment.dueDate)}
-                </p>
-              </>
-            ) : (
-              <div className="text-muted-foreground">Aucune</div>
-            )}
-          </CardContent>
-        </Card>
+        <StatCard
+          index={1}
+          title="Total payé"
+          value={formatCurrency(summary.totalPaid)}
+          icon={CheckCircle2}
+          tone="success"
+        />
+        <StatCard
+          index={2}
+          title="Impayés"
+          value={formatCurrency(summary.overdueAmount)}
+          description={
+            summary.overdueCount > 0
+              ? `${summary.overdueCount} échéance${summary.overdueCount > 1 ? "s" : ""} en retard`
+              : "À jour"
+          }
+          icon={AlertCircle}
+          tone={summary.overdueAmount > 0 ? "danger" : "default"}
+        />
+        <StatCard
+          index={3}
+          title="Prochaine échéance"
+          value={summary.nextDuePayment ? formatCurrency(summary.nextDuePayment.amount) : "Aucune"}
+          description={
+            summary.nextDuePayment ? `Le ${formatDate(summary.nextDuePayment.dueDate)}` : undefined
+          }
+          icon={CalendarClock}
+          tone={summary.nextDuePayment ? "primary" : "default"}
+        />
       </div>
 
-      <Card>
+      <Card className="animate-fade-up" style={{ "--stagger": 4 } as React.CSSProperties}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Baux ({tenant.leases.length})
+            <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />
+            Baux{" "}
+            <span className="font-normal text-muted-foreground tabular-nums">
+              ({tenant.leases.length}
+              {activeLeaseCount > 0 ? `, ${activeLeaseCount} actif${activeLeaseCount > 1 ? "s" : ""}` : ""})
+            </span>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Bien</TableHead>
-                  <TableHead>Période</TableHead>
-                  <TableHead>Loyer</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tenant.leases.map((lease) => (
-                  <TableRow key={lease.id}>
-                    <TableCell>
-                      <div className="font-medium flex items-center gap-2">
-                        <Building2 className="h-3 w-3 text-muted-foreground" />
-                        {lease.property.name}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {lease.property.address}, {lease.property.city}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {formatDate(lease.startDate)} au {formatDate(lease.endDate)}
-                    </TableCell>
-                    <TableCell className="font-semibold">
-                      {formatCurrency(lease.monthlyRent)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={leaseStatusColors[lease.status]}>
-                        {leaseStatusLabels[lease.status] ?? lease.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => router.push(`/leases/${lease.id}`)}
-                        aria-label="Voir le bail"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
+          {tenant.leases.length === 0 ? (
+            <EmptyState
+              icon={FileText}
+              title="Aucun bail"
+              description="Ce locataire n'a encore aucun bail sur vos biens."
+              className="py-10"
+            />
+          ) : (
+            <div className="overflow-hidden rounded-lg border">
+              <Table className={tableClass}>
+                <TableHeader>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableHead>Bien</TableHead>
+                    <TableHead>Période</TableHead>
+                    <TableHead className="text-right">Loyer</TableHead>
+                    <TableHead>Statut</TableHead>
+                    <TableHead className="w-12">
+                      <span className="sr-only">Ouvrir</span>
+                    </TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {tenant.leases.map((lease) => (
+                    <TableRow
+                      key={lease.id}
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => router.push(`/leases/${lease.id}`)}
+                    >
+                      <TableCell>
+                        <div className="font-medium">{lease.property.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {lease.property.address}, {lease.property.city}
+                        </div>
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {formatDate(lease.startDate)} au {formatDate(lease.endDate)}
+                      </TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {formatCurrency(lease.monthlyRent)}
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge kind="lease" status={lease.status} />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/leases/${lease.id}`);
+                          }}
+                          aria-label={`Voir le bail ${lease.property.name}`}
+                        >
+                          <ChevronRight className="h-4 w-4" aria-hidden />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="animate-fade-up" style={{ "--stagger": 5 } as React.CSSProperties}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Receipt className="h-5 w-5" />
+            <Receipt className="h-4 w-4 text-muted-foreground" aria-hidden />
             Derniers paiements
           </CardTitle>
         </CardHeader>
         <CardContent>
           {recentPayments.length === 0 ? (
-            <p className="py-6 text-center text-muted-foreground">Aucun paiement enregistré</p>
+            <EmptyState
+              icon={Receipt}
+              title="Aucun paiement enregistré"
+              description="Les échéances passées et réglées apparaîtront ici."
+              className="py-10"
+            />
           ) : (
-            <div className="rounded-md border">
-              <Table>
+            <div className="overflow-hidden rounded-lg border">
+              <Table className={tableClass}>
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
                     <TableHead>Échéance</TableHead>
                     <TableHead>Bien</TableHead>
-                    <TableHead>Montant</TableHead>
+                    <TableHead className="text-right">Montant</TableHead>
                     <TableHead>Statut</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="w-12">
+                      <span className="sr-only">Ouvrir</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recentPayments.map((payment) => (
-                    <TableRow key={payment.id}>
-                      <TableCell>
-                        <div>{formatDate(payment.dueDate)}</div>
-                        {payment.periodStart && (
-                          <div className="text-sm text-muted-foreground capitalize">
-                            {formatPeriod(payment.periodStart)}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>{payment.propertyName}</TableCell>
-                      <TableCell className="font-semibold">
-                        {formatCurrency(payment.amount)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={paymentStatusColors[payment.status]}>
-                          {paymentStatusLabels[payment.status] ?? payment.status}
-                        </Badge>
-                        {payment.status === "PAID" && payment.paidDate && (
-                          <div className="text-xs text-muted-foreground">
-                            Le {formatDate(payment.paidDate)}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => router.push(`/payments/${payment.id}`)}
-                          aria-label="Voir le paiement"
+                  {recentPayments.map((payment) => {
+                    const isOverdue = payment.status === "OVERDUE";
+                    return (
+                      <TableRow
+                        key={payment.id}
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => router.push(`/payments/${payment.id}`)}
+                      >
+                        <TableCell>
+                          <div className="tabular-nums">{formatDate(payment.dueDate)}</div>
+                          {payment.periodStart && (
+                            <div className="text-xs capitalize text-muted-foreground">
+                              {formatPeriod(payment.periodStart)}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>{payment.propertyName}</TableCell>
+                        <TableCell
+                          className={cn(
+                            "text-right font-medium tabular-nums",
+                            isOverdue && "text-destructive"
+                          )}
                         >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                          {formatCurrency(payment.amount)}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge kind="payment" status={payment.status} />
+                          {payment.status === "PAID" && payment.paidDate && (
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              Le {formatDate(payment.paidDate)}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/payments/${payment.id}`);
+                            }}
+                            aria-label={`Voir le paiement du ${formatDate(payment.dueDate)}`}
+                          >
+                            <ChevronRight className="h-4 w-4" aria-hidden />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

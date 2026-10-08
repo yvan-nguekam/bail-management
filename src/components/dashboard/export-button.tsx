@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Download } from "lucide-react"
+import { Download, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import {
   exportPaymentsToCSV,
@@ -11,13 +11,19 @@ import {
   exportRevenueReportToCSV
 } from "@/lib/export"
 
+export type ExportType = "payments" | "leases" | "properties" | "revenue"
+
+/** Rows handed to the CSV helpers; each exporter picks the fields it needs. */
+export type ExportRow = Record<string, unknown>
+
 interface ExportButtonProps {
-  type: "payments" | "leases" | "properties" | "revenue"
-  data?: any[]
-  filters?: Record<string, any>
+  type: ExportType
+  data?: ExportRow[]
+  filters?: Record<string, string>
+  className?: string
 }
 
-export function ExportButton({ type, data, filters }: ExportButtonProps) {
+export function ExportButton({ type, data, filters, className }: ExportButtonProps) {
   const [loading, setLoading] = useState(false)
 
   const handleExport = async () => {
@@ -49,7 +55,7 @@ export function ExportButton({ type, data, filters }: ExportButtonProps) {
           throw new Error("Export failed")
         }
 
-        const fetchedData = await response.json()
+        const fetchedData: ExportRow[] = await response.json()
 
         switch (type) {
           case "payments":
@@ -64,10 +70,10 @@ export function ExportButton({ type, data, filters }: ExportButtonProps) {
         }
       }
 
-      toast.success("Export successful")
+      toast.success("Export terminé")
     } catch (error) {
       console.error("Export error:", error)
-      toast.error("Failed to export data")
+      toast.error("L'export a échoué")
     } finally {
       setLoading(false)
     }
@@ -78,9 +84,15 @@ export function ExportButton({ type, data, filters }: ExportButtonProps) {
       variant="outline"
       onClick={handleExport}
       disabled={loading}
+      aria-busy={loading}
+      className={className}
     >
-      <Download className="mr-2 h-4 w-4" />
-      {loading ? "Exporting..." : "Export CSV"}
+      {loading ? (
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+      ) : (
+        <Download className="h-4 w-4" aria-hidden />
+      )}
+      {loading ? "Export en cours…" : "Exporter en CSV"}
     </Button>
   )
 }

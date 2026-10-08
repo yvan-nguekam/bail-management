@@ -2,130 +2,103 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { Building2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
-  Building2,
-  LayoutDashboard,
-  Users,
-  FileText,
-  CreditCard,
-  Wrench,
-  MessageSquare,
-  Bell,
-  FolderOpen,
-  BarChart3,
-  Settings,
-  type LucideIcon
-} from "lucide-react"
+  isNavItemActive,
+  navigationForRole,
+  settingsItem,
+  type NavItem,
+} from "./nav-items"
 
-interface NavItem {
-  title: string
-  href: string
-  icon: LucideIcon
-  roles?: string[]
-}
-
-const navigation: NavItem[] = [
-  {
-    title: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    title: "Properties",
-    href: "/properties",
-    icon: Building2,
-    roles: ["ADMIN", "LANDLORD", "MANAGER"],
-  },
-  {
-    title: "Leases",
-    href: "/leases",
-    icon: FileText,
-  },
-  {
-    title: "Tenants",
-    href: "/tenants",
-    icon: Users,
-    roles: ["ADMIN", "LANDLORD", "MANAGER"],
-  },
-  {
-    title: "Payments",
-    href: "/payments",
-    icon: CreditCard,
-  },
-  {
-    title: "Maintenance",
-    href: "/maintenance",
-    icon: Wrench,
-  },
-  {
-    title: "Messages",
-    href: "/messages",
-    icon: MessageSquare,
-  },
-  {
-    title: "Documents",
-    href: "/documents",
-    icon: FolderOpen,
-  },
-  {
-    title: "Reports",
-    href: "/reports",
-    icon: BarChart3,
-    roles: ["ADMIN", "LANDLORD", "MANAGER"],
-  },
-]
-
-interface SidebarProps {
+interface SidebarNavProps {
   role?: string
+  onNavigate?: () => void
 }
 
-export function Sidebar({ role }: SidebarProps) {
+function NavLink({
+  item,
+  active,
+  onNavigate,
+}: {
+  item: NavItem
+  active: boolean
+  onNavigate?: () => void
+}) {
+  return (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "group relative flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors duration-200",
+        active
+          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+          : "text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
+      )}
+    >
+      {/* Active indicator bar */}
+      <span
+        aria-hidden
+        className={cn(
+          "absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-sidebar-primary transition-opacity duration-200",
+          active ? "opacity-100" : "opacity-0"
+        )}
+      />
+      <item.icon
+        className={cn(
+          "h-4 w-4 shrink-0 transition-colors",
+          active ? "text-sidebar-primary" : "text-sidebar-foreground/60 group-hover:text-sidebar-foreground"
+        )}
+      />
+      <span className="truncate">{item.title}</span>
+    </Link>
+  )
+}
+
+/** Navigation list, shared by the desktop sidebar and the mobile sheet. */
+export function SidebarNav({ role, onNavigate }: SidebarNavProps) {
   const pathname = usePathname()
 
-  const filteredNav = navigation.filter(
-    (item) => !item.roles || !role || item.roles.includes(role)
-  )
-
   return (
-    <div className="flex h-full w-64 flex-col border-r bg-card">
-      <div className="flex h-16 items-center border-b px-6">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <Building2 className="h-6 w-6" />
-          <span className="text-lg font-bold">RentalManager</span>
+    <div className="flex h-full flex-col">
+      <div className="flex h-16 items-center border-b border-sidebar-border px-5">
+        <Link href="/dashboard" onClick={onNavigate} className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+            <Building2 className="h-4 w-4" />
+          </span>
+          <span className="text-base font-semibold tracking-tight">RentalManager</span>
         </Link>
       </div>
-      <ScrollArea className="flex-1 p-4">
-        <nav className="space-y-1">
-          {filteredNav.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
-            return (
-              <Link key={item.href} href={item.href}>
-                <Button
-                  variant={isActive ? "secondary" : "ghost"}
-                  className={cn(
-                    "w-full justify-start gap-3",
-                    isActive && "bg-secondary font-medium"
-                  )}
-                >
-                  <item.icon className="h-4 w-4" />
-                  {item.title}
-                </Button>
-              </Link>
-            )
-          })}
+      <ScrollArea className="flex-1">
+        <nav aria-label="Navigation principale" className="space-y-1 p-3">
+          {navigationForRole(role).map((item) => (
+            <NavLink
+              key={item.href}
+              item={item}
+              active={isNavItemActive(item, pathname)}
+              onNavigate={onNavigate}
+            />
+          ))}
         </nav>
       </ScrollArea>
-      <div className="border-t p-4">
-        <Link href="/settings">
-          <Button variant="ghost" className="w-full justify-start gap-3">
-            <Settings className="h-4 w-4" />
-            Settings
-          </Button>
-        </Link>
+      <div className="border-t border-sidebar-border p-3">
+        <NavLink
+          item={settingsItem}
+          active={isNavItemActive(settingsItem, pathname)}
+          onNavigate={onNavigate}
+        />
       </div>
     </div>
+  )
+}
+
+/** Desktop sidebar (hidden below lg; the header opens a sheet instead). */
+export function Sidebar({ role }: { role?: string }) {
+  return (
+    <aside className="hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:block">
+      <SidebarNav role={role} />
+    </aside>
   )
 }

@@ -5,8 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -25,7 +30,9 @@ import {
   FormMessage,
   FormDescription,
 } from "@/components/ui/form";
-import { ArrowLeft, Loader2, FileText, Building2, User, CalendarClock } from "lucide-react";
+import { PageHeader } from "@/components/shared/page-header";
+import { PageSkeleton } from "@/components/shared/page-skeleton";
+import { FormActions } from "@/components/properties/form-actions";
 import { PaymentScheduleTable } from "@/components/leases/payment-schedule-table";
 import { generatePaymentSchedule, scheduleTotal } from "@/lib/payment-schedule";
 import { formatCurrency } from "@/lib/utils";
@@ -185,135 +192,115 @@ export default function NewLeasePage() {
   };
 
   if (loadingData) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton stats={0} />;
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-3xl font-bold">Nouveau bail</h1>
-          <p className="text-muted-foreground">
-            Créez un nouveau contrat de location
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Nouveau bail"
+        description="Créez un contrat de location entre un bien et un locataire."
+        backHref="/leases"
+      />
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           {/* Sélection propriété et locataire */}
-          <Card>
+          <Card className="animate-fade-up" style={{ "--stagger": 1 } as React.CSSProperties}>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Informations du bail
-              </CardTitle>
+              <CardTitle>Bien et locataire</CardTitle>
+              <CardDescription>
+                Seuls les biens disponibles sont proposés. Le loyer et la caution sont
+                préremplis depuis le bien.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <FormField
-                control={form.control}
-                name="propertyId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Propriété</FormLabel>
-                    <Select
-                      onValueChange={(value) => {
-                        field.onChange(value);
-                        handlePropertyChange(value);
-                      }}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner une propriété" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {properties.length === 0 ? (
-                          <div className="p-2 text-sm text-muted-foreground">
-                            Aucune propriété disponible
-                          </div>
-                        ) : (
-                          properties.map((property) => (
-                            <SelectItem key={property.id} value={property.id}>
-                              <div className="flex items-center gap-2">
-                                <Building2 className="h-4 w-4" />
-                                <div>
-                                  <div className="font-medium">
-                                    {property.name}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {property.address}, {property.city}
-                                  </div>
-                                </div>
-                              </div>
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="propertyId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Bien</FormLabel>
+                      <Select
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          handlePropertyChange(value);
+                        }}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Sélectionner un bien" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {properties.length === 0 ? (
+                            <div className="p-2 text-sm text-muted-foreground">
+                              Aucun bien disponible
+                            </div>
+                          ) : (
+                            properties.map((property) => (
+                              <SelectItem key={property.id} value={property.id}>
+                                <span className="font-medium">{property.name}</span>
+                                <span className="truncate text-xs text-muted-foreground">
+                                  {property.address}, {property.city}
+                                </span>
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <FormField
-                control={form.control}
-                name="tenantId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Locataire</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un locataire" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {tenants.length === 0 ? (
-                          <div className="p-2 text-sm text-muted-foreground">
-                            Aucun locataire disponible
-                          </div>
-                        ) : (
-                          tenants.map((tenant) => (
-                            <SelectItem key={tenant.id} value={tenant.id}>
-                              <div className="flex items-center gap-2">
-                                <User className="h-4 w-4" />
-                                <div>
-                                  <div className="font-medium">
-                                    {tenant.name}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {tenant.email}
-                                  </div>
-                                </div>
-                              </div>
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={form.control}
+                  name="tenantId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Locataire</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Sélectionner un locataire" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {tenants.length === 0 ? (
+                            <div className="p-2 text-sm text-muted-foreground">
+                              Aucun locataire disponible
+                            </div>
+                          ) : (
+                            tenants.map((tenant) => (
+                              <SelectItem key={tenant.id} value={tenant.id}>
+                                <span className="font-medium">{tenant.name}</span>
+                                <span className="truncate text-xs text-muted-foreground">
+                                  {tenant.email}
+                                </span>
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </CardContent>
           </Card>
 
           {/* Période du bail */}
-          <Card>
+          <Card className="animate-fade-up" style={{ "--stagger": 2 } as React.CSSProperties}>
             <CardHeader>
               <CardTitle>Période du bail</CardTitle>
+              <CardDescription>La date de fin est incluse dans la location.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
@@ -349,9 +336,10 @@ export default function NewLeasePage() {
           </Card>
 
           {/* Informations financières */}
-          <Card>
+          <Card className="animate-fade-up" style={{ "--stagger": 3 } as React.CSSProperties}>
             <CardHeader>
               <CardTitle>Informations financières</CardTitle>
+              <CardDescription>Loyer, dépôt de garantie et jour d&apos;exigibilité.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-3">
@@ -365,7 +353,7 @@ export default function NewLeasePage() {
                         <Input type="number" min="0" {...field} value={field.value as number} />
                       </FormControl>
                       <FormDescription>
-                        Rempli automatiquement depuis la propriété
+                        Prérempli depuis le bien
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -382,7 +370,7 @@ export default function NewLeasePage() {
                         <Input type="number" min="0" {...field} value={field.value as number} />
                       </FormControl>
                       <FormDescription>
-                        Rempli automatiquement depuis la propriété
+                        Préremplie depuis le bien
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -410,23 +398,23 @@ export default function NewLeasePage() {
           </Card>
 
           {/* Échéancier des loyers */}
-          <Card>
+          <Card className="animate-fade-up" style={{ "--stagger": 4 } as React.CSSProperties}>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CalendarClock className="h-5 w-5" />
-                Échéancier des loyers
-              </CardTitle>
+              <CardTitle>Échéancier des loyers</CardTitle>
+              <CardDescription>
+                Aperçu des échéances qui seront créées avec le bail.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <FormField
                 control={form.control}
                 name="generateSchedule"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-start gap-3 space-y-0">
+                  <FormItem className="flex flex-row items-start gap-3 space-y-0 rounded-lg border bg-muted/30 p-4">
                     <FormControl>
                       <input
                         type="checkbox"
-                        className="mt-1 h-4 w-4 accent-primary"
+                        className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-input accent-primary"
                         checked={field.value}
                         onChange={(event) => field.onChange(event.target.checked)}
                         onBlur={field.onBlur}
@@ -435,7 +423,9 @@ export default function NewLeasePage() {
                       />
                     </FormControl>
                     <div className="space-y-1">
-                      <FormLabel>Générer automatiquement les échéances</FormLabel>
+                      <FormLabel className="cursor-pointer">
+                        Générer automatiquement les échéances
+                      </FormLabel>
                       <FormDescription>
                         Une échéance par mois, du début à la fin du bail. Le premier et le
                         dernier mois incomplets sont calculés au prorata.
@@ -447,15 +437,22 @@ export default function NewLeasePage() {
 
               {generateSchedule &&
                 (schedulePreview.length > 0 ? (
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">
-                      {schedulePreview.length} échéance
-                      {schedulePreview.length > 1 ? "s" : ""} pour un total de{" "}
-                      <span className="font-medium text-foreground">
-                        {formatCurrency(scheduleTotal(schedulePreview))}
-                      </span>
-                    </p>
-                    <div className="max-h-72 overflow-y-auto rounded-md border">
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
+                      <p className="text-muted-foreground">
+                        <span className="font-medium text-foreground tabular-nums">
+                          {schedulePreview.length}
+                        </span>{" "}
+                        échéance{schedulePreview.length > 1 ? "s" : ""}
+                      </p>
+                      <p className="text-muted-foreground">
+                        Total{" "}
+                        <span className="font-semibold text-foreground tabular-nums">
+                          {formatCurrency(scheduleTotal(schedulePreview))}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto rounded-lg border">
                       <PaymentScheduleTable rows={schedulePreview} />
                     </div>
                   </div>
@@ -468,9 +465,10 @@ export default function NewLeasePage() {
           </Card>
 
           {/* Conditions du bail */}
-          <Card>
+          <Card className="animate-fade-up" style={{ "--stagger": 5 } as React.CSSProperties}>
             <CardHeader>
               <CardTitle>Conditions du bail</CardTitle>
+              <CardDescription>Clauses particulières reprises dans le contrat.</CardDescription>
             </CardHeader>
             <CardContent>
               <FormField
@@ -481,13 +479,13 @@ export default function NewLeasePage() {
                     <FormLabel>Termes et conditions</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Décrivez les conditions du bail..."
+                        placeholder="Décrivez les conditions du bail…"
                         className="min-h-[150px]"
                         {...field}
                       />
                     </FormControl>
                     <FormDescription>
-                      Clause spéciales, règlements, etc.
+                      Clauses spéciales, règlements, etc.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -496,22 +494,11 @@ export default function NewLeasePage() {
             </CardContent>
           </Card>
 
-          <div className="flex gap-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.back()}
-              disabled={isSubmitting}
-            >
-              Annuler
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              Créer le bail
-            </Button>
-          </div>
+          <FormActions
+            submitLabel="Créer le bail"
+            isSubmitting={isSubmitting}
+            onCancel={() => router.back()}
+          />
         </form>
       </Form>
     </div>

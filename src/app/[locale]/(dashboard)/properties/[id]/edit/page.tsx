@@ -5,8 +5,13 @@ import { useRouter, useParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -24,7 +29,14 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { ArrowLeft, Loader2, Building2 } from "lucide-react";
+import { PageHeader } from "@/components/shared/page-header";
+import { PageSkeleton } from "@/components/shared/page-skeleton";
+import { statusLabel } from "@/components/shared/status-badge";
+import { FormActions } from "@/components/properties/form-actions";
+import {
+  propertyStatuses,
+  propertyTypeLabels,
+} from "@/components/properties/property-labels";
 import { toast } from "sonner";
 
 const propertySchema = z.object({
@@ -51,6 +63,7 @@ export default function EditPropertyPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [propertyName, setPropertyName] = useState("");
 
   const form = useForm<z.input<typeof propertySchema>, unknown, PropertyFormData>({
     resolver: zodResolver(propertySchema),
@@ -70,6 +83,7 @@ export default function EditPropertyPage() {
       }
 
       const property = await response.json();
+      setPropertyName(property.name);
 
       // Formater la date pour l'input date
       const availableFromDate = new Date(property.availableFrom)
@@ -135,36 +149,24 @@ export default function EditPropertyPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton stats={0} />;
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-3xl font-bold">Modifier la propriété</h1>
-          <p className="text-muted-foreground">
-            Mettez à jour les informations de la propriété
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Modifier le bien"
+        description={propertyName || "Mettez à jour les informations du bien."}
+        backHref={`/properties/${params.id}`}
+      />
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           {/* Informations générales */}
-          <Card>
+          <Card className="animate-fade-up" style={{ "--stagger": 1 } as React.CSSProperties}>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Building2 className="h-5 w-5" />
-                Informations générales
-              </CardTitle>
+              <CardTitle>Informations générales</CardTitle>
+              <CardDescription>Nom, type, statut et disponibilité du bien.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <FormField
@@ -172,9 +174,9 @@ export default function EditPropertyPage() {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nom de la propriété</FormLabel>
+                    <FormLabel>Nom du bien</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex: Appartement Centre-ville" {...field} />
+                      <Input placeholder="Ex. Appartement Centre-ville" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -187,23 +189,22 @@ export default function EditPropertyPage() {
                   name="type"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Type de propriété</FormLabel>
+                      <FormLabel>Type de bien</FormLabel>
                       <Select
                         onValueChange={field.onChange}
                         value={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="w-full">
                             <SelectValue placeholder="Sélectionner" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="APARTMENT">Appartement</SelectItem>
-                          <SelectItem value="HOUSE">Maison</SelectItem>
-                          <SelectItem value="STUDIO">Studio</SelectItem>
-                          <SelectItem value="COMMERCIAL">Commercial</SelectItem>
-                          <SelectItem value="OFFICE">Bureau</SelectItem>
-                          <SelectItem value="OTHER">Autre</SelectItem>
+                          {Object.entries(propertyTypeLabels).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -222,19 +223,16 @@ export default function EditPropertyPage() {
                         value={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="w-full">
                             <SelectValue placeholder="Sélectionner" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="AVAILABLE">Disponible</SelectItem>
-                          <SelectItem value="OCCUPIED">Occupé</SelectItem>
-                          <SelectItem value="MAINTENANCE">
-                            Maintenance
-                          </SelectItem>
-                          <SelectItem value="UNAVAILABLE">
-                            Indisponible
-                          </SelectItem>
+                          {propertyStatuses.map((value) => (
+                            <SelectItem key={value} value={value}>
+                              {statusLabel("property", value)}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -265,7 +263,7 @@ export default function EditPropertyPage() {
                     <FormLabel>Description</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Décrivez la propriété..."
+                        placeholder="Décrivez le bien…"
                         className="min-h-[100px]"
                         {...field}
                       />
@@ -278,9 +276,10 @@ export default function EditPropertyPage() {
           </Card>
 
           {/* Localisation */}
-          <Card>
+          <Card className="animate-fade-up" style={{ "--stagger": 2 } as React.CSSProperties}>
             <CardHeader>
               <CardTitle>Localisation</CardTitle>
+              <CardDescription>Adresse complète du bien.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <FormField
@@ -290,7 +289,7 @@ export default function EditPropertyPage() {
                   <FormItem>
                     <FormLabel>Adresse</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex: 123 Rue de la Paix" {...field} />
+                      <Input placeholder="Ex. 123 Rue de la Paix" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -305,7 +304,7 @@ export default function EditPropertyPage() {
                     <FormItem>
                       <FormLabel>Ville</FormLabel>
                       <FormControl>
-                        <Input placeholder="Ex: Yaoundé" {...field} />
+                        <Input placeholder="Ex. Yaoundé" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -319,7 +318,7 @@ export default function EditPropertyPage() {
                     <FormItem>
                       <FormLabel>Code postal</FormLabel>
                       <FormControl>
-                        <Input placeholder="Ex: 1234" {...field} />
+                        <Input placeholder="Ex. 1234" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -333,7 +332,7 @@ export default function EditPropertyPage() {
                     <FormItem>
                       <FormLabel>Pays</FormLabel>
                       <FormControl>
-                        <Input placeholder="Ex: Cameroun" {...field} />
+                        <Input placeholder="Ex. Cameroun" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -344,9 +343,10 @@ export default function EditPropertyPage() {
           </Card>
 
           {/* Caractéristiques */}
-          <Card>
+          <Card className="animate-fade-up" style={{ "--stagger": 3 } as React.CSSProperties}>
             <CardHeader>
               <CardTitle>Caractéristiques</CardTitle>
+              <CardDescription>Composition et surface habitable.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-3">
@@ -396,9 +396,12 @@ export default function EditPropertyPage() {
           </Card>
 
           {/* Finances */}
-          <Card>
+          <Card className="animate-fade-up" style={{ "--stagger": 4 } as React.CSSProperties}>
             <CardHeader>
               <CardTitle>Informations financières</CardTitle>
+              <CardDescription>
+                Montants proposés par défaut lors de la création d&apos;un bail.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
@@ -433,22 +436,11 @@ export default function EditPropertyPage() {
             </CardContent>
           </Card>
 
-          <div className="flex gap-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.back()}
-              disabled={isSubmitting}
-            >
-              Annuler
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              Enregistrer les modifications
-            </Button>
-          </div>
+          <FormActions
+            submitLabel="Enregistrer les modifications"
+            isSubmitting={isSubmitting}
+            onCancel={() => router.back()}
+          />
         </form>
       </Form>
     </div>
