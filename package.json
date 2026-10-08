@@ -15,7 +15,16 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --env-file-if-exists=.env prisma/seed.ts",
+    "db:reset": "prisma migrate reset",
+    "db:check": "prisma migrate status",
+    "db:studio": "prisma studio",
     "postinstall": "prisma generate"
+  },
+  "prisma": {
+    "seed": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --env-file-if-exists=.env prisma/seed.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

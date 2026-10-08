@@ -86,30 +86,48 @@ pnpm install
 
 ### 2. Configuration de la base de données
 
-Créez une base de données PostgreSQL et configurez le fichier `.env`:
+Installez PostgreSQL (sur macOS : [Postgres.app](https://postgresapp.com), voir la section
+« Base de données » du README), créez une base `bail_management` et configurez le fichier `.env`:
 
 \`\`\`env
-DATABASE_URL="postgresql://user:password@localhost:5432/rental_management?schema=public"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/bail_management"
+DIRECT_URL="postgresql://postgres:postgres@localhost:5432/bail_management"
 NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="votre-clé-secrète-ici"
 \`\`\`
 
-### 3. Génération et migration Prisma
+En local, `DATABASE_URL` et `DIRECT_URL` sont identiques. Sur Supabase, la première est l'URL
+« pooled » (port 6543, `?pgbouncer=true`) et la seconde l'URL directe (port 5432).
+
+### 3. Migrations Prisma
+
+Le schéma est versionné par migrations (`prisma/migrations/`). Le client Prisma est généré
+automatiquement à l'installation (`postinstall`).
 
 \`\`\`bash
-# Générer le client Prisma
-pnpm prisma generate
+# Appliquer les migrations à la base locale (crée les tables)
+pnpm db:migrate
 
-# Créer les tables dans la base de données
-pnpm prisma db push
+# Après une modification de prisma/schema.prisma : crée une nouvelle migration, à commiter
+pnpm db:migrate --name nom_de_la_migration
 
-# Ou utiliser les migrations
-pnpm prisma migrate dev --name init
+# Sur un environnement distant (CI, Vercel, Supabase) : appliquer sans interaction
+pnpm db:deploy
 \`\`\`
 
-### 4. (Optionnel) Seed de données de test
+`pnpm prisma:push` (`prisma db push`) reste disponible pour le prototypage rapide uniquement :
+il ne crée pas de migration et peut supprimer des données.
 
-Créez un fichier `prisma/seed.ts` pour ajouter des données de test.
+### 4. Données de test (seed)
+
+\`\`\`bash
+pnpm db:seed
+\`\`\`
+
+Le script `prisma/seed.ts` efface toutes les tables puis crée des utilisateurs, biens, baux,
+paiements, demandes de maintenance, notifications et messages de démonstration. Comptes créés
+(mot de passe `password123`) : `admin@test.com`, `landlord@test.com`, `manager@test.com`,
+`tenant@test.com`, `tenant2@test.com`.
 
 ### 5. Lancer l'application
 
@@ -222,8 +240,10 @@ L'application sera disponible sur `http://localhost:3000`
 
 1. Push le code sur GitHub
 2. Connectez votre repo à Vercel
-3. Configurez les variables d'environnement
-4. Déployez !
+3. Configurez les variables d'environnement (`DATABASE_URL` et `DIRECT_URL` Supabase,
+   `NEXTAUTH_*`, `CRON_SECRET`, `RESEND_*`)
+4. Définissez la Build Command : `pnpm db:deploy && pnpm build` (applique les migrations avant le build)
+5. Déployez !
 
 ### Autres options
 - Railway (PostgreSQL inclus)
