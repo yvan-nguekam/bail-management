@@ -11,28 +11,35 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Languages } from "lucide-react"
 
-const languages = [
+export const languages = [
   { code: "fr", name: "Français", flag: "🇫🇷" },
   { code: "en", name: "English", flag: "🇺🇸" }
 ]
 
-export function LanguageSwitcher() {
+/** Same page in another locale ("as-needed" prefix: none for fr, /en/... otherwise). */
+export function localizedPathname(pathname: string, newLocale: string) {
+  const pathnameWithoutLocale = pathname.replace(/^\/(en|fr)(?=\/|$)/, "") || "/"
+  return newLocale === "fr" ? pathnameWithoutLocale : `/${newLocale}${pathnameWithoutLocale}`
+}
+
+/** Shared by the header switcher and the settings page. */
+export function useLanguageSwitch() {
   const locale = useLocale()
   const router = useRouter()
   const pathname = usePathname()
 
-  const currentLanguage = languages.find(lang => lang.code === locale) || languages[0]
-
   const switchLanguage = (newLocale: string) => {
-    // Remove current locale from pathname
-    const pathnameWithoutLocale = pathname.replace(/^\/(en|fr)/, "") || "/"
-
-    // Add new locale to pathname
-    const newPathname = newLocale === "fr" ? pathnameWithoutLocale : `/${newLocale}${pathnameWithoutLocale}`
-
-    router.push(newPathname)
+    router.push(localizedPathname(pathname, newLocale))
     router.refresh()
   }
+
+  return { locale, switchLanguage }
+}
+
+export function LanguageSwitcher() {
+  const { locale, switchLanguage } = useLanguageSwitch()
+
+  const currentLanguage = languages.find(lang => lang.code === locale) || languages[0]
 
   return (
     <DropdownMenu>

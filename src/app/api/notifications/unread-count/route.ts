@@ -3,8 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// POST /api/notifications/mark-all-read
-export async function POST() {
+// GET /api/notifications/unread-count - Nombre de notifications non lues (badge de la cloche)
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
@@ -12,18 +12,11 @@ export async function POST() {
       return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
     }
 
-    const result = await prisma.notification.updateMany({
-      where: {
-        userId: session.user.id,
-        read: false,
-      },
-      data: { read: true, readAt: new Date() },
+    const unreadCount = await prisma.notification.count({
+      where: { userId: session.user.id, read: false },
     });
 
-    return NextResponse.json({
-      message: "Toutes les notifications ont été marquées comme lues",
-      updated: result.count,
-    });
+    return NextResponse.json({ unreadCount });
   } catch (error) {
     console.error("Erreur:", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });

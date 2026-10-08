@@ -47,11 +47,15 @@ export const authOptions: NextAuthOptions = {
     })
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id
-        token.role = (user as any).role
-        token.avatar = (user as any).avatar
+        token.role = user.role
+        token.avatar = user.avatar
+      }
+      // useSession().update({ name }) après modification du profil : on rafraîchit le JWT
+      if (trigger === "update" && session && typeof session.name === "string") {
+        token.name = session.name
       }
       return token
     },

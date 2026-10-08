@@ -13,8 +13,8 @@ export default async function DashboardPage() {
 
   // Redirect based on user role
   switch (role) {
-    // TODO: dedicated /admin dashboard (feature branch); landlord view until then
     case "ADMIN":
+      redirect("/admin")
     case "LANDLORD":
     case "MANAGER":
       redirect("/landlord")

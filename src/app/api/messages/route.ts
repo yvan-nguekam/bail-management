@@ -3,15 +3,16 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { canMessageUser } from "@/lib/message-contacts";
 
 const messageSchema = z.object({
   receiverId: z.string().min(1, "Le destinataire est requis"),
-  subject: z.string().min(1, "Le sujet est requis"),
-  content: z.string().min(1, "Le contenu est requis"),
+  subject: z.string().trim().min(1, "Le sujet est requis").max(150, "150 caractères maximum"),
+  content: z.string().trim().min(1, "Le contenu est requis").max(5000, "5000 caractères maximum"),
 });
 
-// GET /api/messages - Liste des conversations
-export async function GET(request: NextRequest) {
+// GET /api/messages - Messages envoyés et reçus par l'utilisateur
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
@@ -28,16 +29,20 @@ export async function GET(request: NextRequest) {
       },
       include: {
         sender: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true, email: true, role: true },
         },
         receiver: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true, email: true, role: true },
         },
       },
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json({ messages });
+    const unreadCount = messages.filter(
+      (m) => m.receiverId === session.user.id && !m.read
+    ).length;
+
+    return NextResponse.json({ messages, unreadCount });
   } catch (error) {
     console.error("Erreur:", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
@@ -65,14 +70,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Destinataire non trouvé" }, { status: 404 });
     }
 
+    // Le destinataire doit faire partie des contacts autorisés (jamais soi-même)
+    if (!(await canMessageUser(session.user, validatedData.receiverId))) {
+      return NextResponse.json(
+        { error: "Vous ne pouvez pas écrire à cet utilisateur" },
+        { status: 403 }
+      );
+    }
+
     const message = await prisma.message.create({
       data: {
         ...validatedData,
         senderId: session.user.id,
       },
       include: {
-        sender: { select: { id: true, name: true, email: true } },
-        receiver: { select: { id: true, name: true, email: true } },
+        sender: { select: { id: true, name: true, email: true, role: true } },
+        receiver: { select: { id: true, name: true, email: true, role: true } },
       },
     });
 
@@ -82,8 +95,9 @@ export async function POST(request: NextRequest) {
         userId: validatedData.receiverId,
         type: "MESSAGE",
         title: "Nouveau message",
-        message: `${session.user.name}: ${validatedData.subject}`,
+        message: `${session.user.name} : ${validatedData.subject}`,
         relatedId: message.id,
+        link: `/messages/${message.id}`,
       },
     });
 
