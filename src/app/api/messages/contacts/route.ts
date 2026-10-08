@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { getContactsForUser } from "@/lib/message-contacts";
 
-// POST /api/notifications/mark-all-read
-export async function POST() {
+// GET /api/messages/contacts - Personnes à qui l'utilisateur peut écrire (périmètre par rôle)
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
@@ -12,18 +12,9 @@ export async function POST() {
       return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
     }
 
-    const result = await prisma.notification.updateMany({
-      where: {
-        userId: session.user.id,
-        read: false,
-      },
-      data: { read: true, readAt: new Date() },
-    });
+    const contacts = await getContactsForUser(session.user);
 
-    return NextResponse.json({
-      message: "Toutes les notifications ont été marquées comme lues",
-      updated: result.count,
-    });
+    return NextResponse.json({ contacts });
   } catch (error) {
     console.error("Erreur:", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });

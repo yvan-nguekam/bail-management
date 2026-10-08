@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
 // GET /api/notifications - Liste des notifications
 export async function GET(request: NextRequest) {
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const unreadOnly = searchParams.get("unreadOnly") === "true";
 
-    const where: any = { userId: session.user.id };
+    const where: Prisma.NotificationWhereInput = { userId: session.user.id };
     if (unreadOnly) {
       where.read = false;
     }

@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut } from "next-auth/react"
-import { Bell, LogOut, Menu, Settings, User } from "lucide-react"
+import { LogOut, Menu, Settings, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -17,6 +17,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { LanguageSwitcher } from "./language-switcher"
+import { NotificationBell } from "./notification-bell"
 import { ThemeToggle } from "./theme-toggle"
 import { SidebarNav } from "./sidebar"
 import { currentNavItem } from "./nav-items"
@@ -73,11 +74,7 @@ export function Header({ user }: HeaderProps) {
       <div className="flex items-center gap-1 sm:gap-2">
         <LanguageSwitcher />
         <ThemeToggle />
-        <Button variant="ghost" size="icon" asChild>
-          <Link href="/notifications" aria-label="Notifications">
-            <Bell className="h-5 w-5" />
-          </Link>
-        </Button>
+        <NotificationBell />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 // POST /api/notifications/[id]/mark-read
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -18,6 +18,7 @@ export async function POST(
 
     const notification = await prisma.notification.findUnique({
       where: { id },
+      select: { id: true, userId: true, read: true },
     });
 
     if (!notification) {
@@ -28,10 +29,13 @@ export async function POST(
       return NextResponse.json({ error: "Non autorisé" }, { status: 403 });
     }
 
-    const updated = await prisma.notification.update({
-      where: { id },
-      data: { read: true },
-    });
+    // Idempotent : on ne réécrit pas readAt si déjà lue
+    const updated = notification.read
+      ? await prisma.notification.findUniqueOrThrow({ where: { id } })
+      : await prisma.notification.update({
+          where: { id },
+          data: { read: true, readAt: new Date() },
+        });
 
     return NextResponse.json(updated);
   } catch (error) {

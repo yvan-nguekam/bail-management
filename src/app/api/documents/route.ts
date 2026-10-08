@@ -3,16 +3,32 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
+import { DOCUMENT_TYPES, guessMimeType } from "@/lib/documents";
 
+// Taille et type MIME sont optionnels pour un document ajouté par lien
+// (l'envoi de fichiers viendra avec une fonctionnalité ultérieure).
 const documentSchema = z.object({
-  name: z.string().min(1, "Le nom est requis"),
-  type: z.enum(["CONTRACT", "INVOICE", "RECEIPT", "REPORT", "OTHER"]),
-  url: z.string().url("URL invalide"),
-  size: z.number().int().positive(),
-  mimeType: z.string().min(1, "Le type MIME est requis"),
+  name: z.string().trim().min(1, "Le nom est requis").max(150, "150 caractères maximum"),
+  type: z.enum(DOCUMENT_TYPES),
+  url: z.string().trim().url("URL invalide"),
+  size: z.number().int().nonnegative().default(0),
+  mimeType: z.string().min(1).optional(),
   propertyId: z.string().optional(),
   leaseId: z.string().optional(),
 });
+
+const documentInclude = {
+  property: { select: { id: true, name: true } },
+  lease: {
+    select: {
+      id: true,
+      property: { select: { id: true, name: true } },
+      tenant: { select: { id: true, name: true } },
+    },
+  },
+  uploadedBy: { select: { id: true, name: true } },
+} as const;
 
 // GET /api/documents
 export async function GET(request: NextRequest) {
@@ -27,7 +43,7 @@ export async function GET(request: NextRequest) {
     const propertyId = searchParams.get("propertyId");
     const leaseId = searchParams.get("leaseId");
 
-    const where: any = {};
+    const where: Prisma.DocumentWhereInput = {};
 
     // Restreindre selon le rôle (les ADMIN voient tout)
     if (session.user.role === "TENANT") {
@@ -56,11 +72,7 @@ export async function GET(request: NextRequest) {
 
     const documents = await prisma.document.findMany({
       where,
-      include: {
-        property: { select: { id: true, name: true } },
-        lease: { select: { id: true } },
-        uploadedBy: { select: { id: true, name: true } },
-      },
+      include: documentInclude,
       orderBy: { createdAt: "desc" },
     });
 
@@ -115,10 +127,19 @@ export async function POST(request: NextRequest) {
     const document = await prisma.document.create({
       data: {
         ...validatedData,
+        mimeType: validatedData.mimeType ?? guessMimeType(validatedData.url),
         uploadedById: session.user.id,
       },
-      include: {
-        uploadedBy: { select: { id: true, name: true } },
+      include: documentInclude,
+    });
+
+    await prisma.activity.create({
+      data: {
+        userId: session.user.id,
+        action: "CREATE_DOCUMENT",
+        entityType: "DOCUMENT",
+        entityId: document.id,
+        details: `Document ajouté : ${document.name}`,
       },
     });
 
