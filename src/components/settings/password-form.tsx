@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useForm } from "react-hook-form"
+import { signOut } from "next-auth/react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { Button } from "@/components/ui/button"
@@ -57,7 +58,9 @@ export function PasswordForm() {
         throw new Error(error.error || "Erreur lors du changement de mot de passe")
       }
       form.reset()
-      toast.success("Mot de passe modifié")
+      // Le changement révoque toutes les sessions, y compris celle-ci
+      toast.success("Mot de passe modifié. Reconnectez-vous avec le nouveau mot de passe.")
+      await signOut({ callbackUrl: "/auth/login" })
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Erreur lors du changement de mot de passe"
@@ -75,7 +78,7 @@ export function PasswordForm() {
           Mot de passe
         </CardTitle>
         <CardDescription>
-          Choisissez un mot de passe d&apos;au moins 8 caractères que vous n&apos;utilisez pas ailleurs.
+          Choisissez un mot de passe d&apos;au moins 8 caractères que vous n&apos;utilisez pas ailleurs. Vous serez ensuite déconnecté de tous vos appareils.
         </CardDescription>
       </CardHeader>
       <CardContent>

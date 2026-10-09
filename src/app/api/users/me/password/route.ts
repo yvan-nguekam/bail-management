@@ -54,8 +54,12 @@ export async function POST(request: NextRequest) {
     const hashed = await bcrypt.hash(parsed.data.newPassword, 12);
     await prisma.user.update({
       where: { id: user.id },
-      data: { password: hashed },
+      // Révoque toutes les sessions ouvertes (y compris celle-ci : reconnexion demandée)
+      data: { password: hashed, passwordChangedAt: new Date() },
     });
+
+    // Les liens de réinitialisation encore actifs deviennent inutilisables
+    await prisma.passwordResetToken.deleteMany({ where: { userId: user.id, usedAt: null } });
 
     await prisma.activity.create({
       data: {

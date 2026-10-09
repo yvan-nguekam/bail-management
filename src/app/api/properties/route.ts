@@ -94,9 +94,11 @@ export async function GET(request: NextRequest) {
             },
           },
           leases: {
-            where: {
-              status: "ACTIVE",
-            },
+            // Un locataire ne voit que son propre bail (pas les co-locataires)
+            where:
+              session.user.role === "TENANT"
+                ? { status: "ACTIVE", tenantId: session.user.id }
+                : { status: "ACTIVE" },
             include: {
               tenant: {
                 select: {
@@ -155,6 +157,17 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const validatedData = propertySchema.parse(body);
+
+    // Le gestionnaire désigné doit être un compte MANAGER existant
+    if (validatedData.managerId) {
+      const manager = await prisma.user.findUnique({
+        where: { id: validatedData.managerId },
+        select: { role: true },
+      });
+      if (manager?.role !== "MANAGER") {
+        return NextResponse.json({ error: "Gestionnaire invalide" }, { status: 400 });
+      }
+    }
 
     // Convertir la date string en Date
     const availableFromDate = new Date(validatedData.availableFrom);

@@ -11,6 +11,7 @@ import {
   computeResolvedAt,
   maintenanceStatusLabels,
 } from "@/lib/maintenance";
+import { isAllowedAssignee } from "@/lib/maintenance-assignees";
 
 const updateMaintenanceSchema = z.object({
   title: z.string().min(1).optional(),
@@ -132,13 +133,16 @@ export async function PUT(
       );
     }
 
-    // L'intervenant assigné doit exister et ne pas être un locataire
+    // L'intervenant doit faire partie de l'équipe du bien (propriétaire, gestionnaire) ou être admin
     if (validatedData.assignedToId) {
       const assignee = await prisma.user.findUnique({
         where: { id: validatedData.assignedToId },
-        select: { role: true },
+        select: { id: true, role: true },
       });
-      if (!assignee || assignee.role === "TENANT") {
+      if (
+        !assignee ||
+        !isAllowedAssignee(assignee, existing.property, existing.assignedToId)
+      ) {
         return NextResponse.json(
           { error: "Intervenant invalide" },
           { status: 400 }

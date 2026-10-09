@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma, UserRole } from "@prisma/client";
 
-// GET /api/users - Liste des utilisateurs (pour sélection de locataires)
+// GET /api/users - Liste des utilisateurs (administration uniquement)
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -19,8 +19,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const role = searchParams.get("role");
 
-    // Seuls les ADMIN, LANDLORD et MANAGER peuvent lister les utilisateurs
-    if (!["ADMIN", "LANDLORD", "MANAGER"].includes(session.user.role)) {
+    // Annuaire complet réservé aux ADMIN. Les bailleurs / gestionnaires passent par
+    // /api/tenants/options (leurs locataires) et /api/tenants/lookup (e-mail exact).
+    if (session.user.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Non autorisé" },
         { status: 403 }
@@ -29,11 +30,7 @@ export async function GET(request: NextRequest) {
 
     const where: Prisma.UserWhereInput = {};
 
-    if (session.user.role !== "ADMIN") {
-      // Bailleurs et gestionnaires ne peuvent lister que des locataires
-      // (sélecteur du formulaire de bail), jamais les autres comptes
-      where.role = "TENANT";
-    } else if (role && (Object.values(UserRole) as string[]).includes(role)) {
+    if (role && (Object.values(UserRole) as string[]).includes(role)) {
       where.role = role as UserRole;
     }
 

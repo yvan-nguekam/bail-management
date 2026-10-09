@@ -34,6 +34,9 @@ import { PageHeader } from "@/components/shared/page-header";
 import { PageSkeleton } from "@/components/shared/page-skeleton";
 import { FormActions } from "@/components/properties/form-actions";
 import { PaymentScheduleTable } from "@/components/leases/payment-schedule-table";
+import { AddTenantDialog, type FoundTenant } from "@/components/leases/add-tenant-dialog";
+import { Button } from "@/components/ui/button";
+import { UserPlus } from "lucide-react";
 import { generatePaymentSchedule, scheduleTotal } from "@/lib/payment-schedule";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
@@ -65,10 +68,17 @@ interface Property {
   securityDeposit: number;
 }
 
-interface User {
+interface TenantOption {
   id: string;
   name: string;
+  /** Absent pour un locataire retrouvé par e-mail exact (seuls id et nom sont renvoyés) */
+  email?: string;
+}
+
+interface PendingInvitation {
+  id: string;
   email: string;
+  name: string;
 }
 
 export default function NewLeasePage() {
@@ -79,7 +89,9 @@ export default function NewLeasePage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [properties, setProperties] = useState<Property[]>([]);
-  const [tenants, setTenants] = useState<User[]>([]);
+  const [tenants, setTenants] = useState<TenantOption[]>([]);
+  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
+  const [addTenantOpen, setAddTenantOpen] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
 
   const form = useForm<z.input<typeof leaseSchema>, unknown, LeaseFormData>({
@@ -128,7 +140,8 @@ export default function NewLeasePage() {
     try {
       const [propertiesRes, tenantsRes] = await Promise.all([
         fetch("/api/properties?limit=100&status=AVAILABLE"),
-        fetch("/api/users?role=TENANT"),
+        // Uniquement « mes » locataires : jamais l'annuaire complet de la plateforme
+        fetch("/api/tenants/options"),
       ]);
 
       if (propertiesRes.ok) {
@@ -138,7 +151,8 @@ export default function NewLeasePage() {
 
       if (tenantsRes.ok) {
         const data = await tenantsRes.json();
-        setTenants(data);
+        setTenants(data.tenants);
+        setPendingInvitations(data.pendingInvitations);
       }
     } catch (error) {
       console.error("Erreur:", error);
@@ -146,6 +160,27 @@ export default function NewLeasePage() {
     } finally {
       setLoadingData(false);
     }
+  };
+
+  const refreshPendingInvitations = async () => {
+    try {
+      const response = await fetch("/api/tenants/options");
+      if (response.ok) {
+        const data = await response.json();
+        setPendingInvitations(data.pendingInvitations);
+      }
+    } catch {
+      // Liste indicative : sans effet sur le formulaire
+    }
+  };
+
+  const handleTenantFound = (tenant: FoundTenant) => {
+    setTenants((current) =>
+      current.some((t) => t.id === tenant.id)
+        ? current
+        : [...current, tenant].sort((a, b) => a.name.localeCompare(b.name, "fr"))
+    );
+    form.setValue("tenantId", tenant.id, { shouldValidate: true });
   };
 
   const handlePropertyChange = (propertyId: string) => {
@@ -215,7 +250,7 @@ export default function NewLeasePage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid items-start gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="propertyId"
@@ -274,20 +309,40 @@ export default function NewLeasePage() {
                         <SelectContent>
                           {tenants.length === 0 ? (
                             <div className="p-2 text-sm text-muted-foreground">
-                              Aucun locataire disponible
+                              Aucun locataire pour l&apos;instant
                             </div>
                           ) : (
                             tenants.map((tenant) => (
                               <SelectItem key={tenant.id} value={tenant.id}>
                                 <span className="font-medium">{tenant.name}</span>
-                                <span className="truncate text-xs text-muted-foreground">
-                                  {tenant.email}
-                                </span>
+                                {tenant.email && (
+                                  <span className="truncate text-xs text-muted-foreground">
+                                    {tenant.email}
+                                  </span>
+                                )}
                               </SelectItem>
                             ))
                           )}
                         </SelectContent>
                       </Select>
+                      <FormDescription>
+                        Vos locataires actuels et passés. Nouveau locataire ?{" "}
+                        <Button
+                          type="button"
+                          variant="link"
+                          className="h-auto p-0 align-baseline"
+                          onClick={() => setAddTenantOpen(true)}
+                        >
+                          <UserPlus className="h-3.5 w-3.5" aria-hidden />
+                          Trouver par e-mail ou inviter
+                        </Button>
+                      </FormDescription>
+                      {pendingInvitations.length > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          En attente d&apos;inscription :{" "}
+                          {pendingInvitations.map((i) => i.name).join(", ")}
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}
@@ -493,6 +548,13 @@ export default function NewLeasePage() {
               />
             </CardContent>
           </Card>
+
+          <AddTenantDialog
+            open={addTenantOpen}
+            onOpenChange={setAddTenantOpen}
+            onSelect={handleTenantFound}
+            onInvited={refreshPendingInvitations}
+          />
 
           <FormActions
             submitLabel="Créer le bail"

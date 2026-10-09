@@ -172,6 +172,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Le locataire doit être un compte TENANT : sinon n'importe quel utilisateur (dont on
+    // connaîtrait l'id) entrerait dans le périmètre du bailleur, coordonnées comprises
+    const tenant = await prisma.user.findUnique({
+      where: { id: validatedData.tenantId },
+      select: { role: true },
+    });
+
+    if (tenant?.role !== "TENANT") {
+      return NextResponse.json(
+        { error: "Locataire invalide" },
+        { status: 400 }
+      );
+    }
+
     // Vérifier qu'il n'y a pas déjà un bail actif pour cette propriété
     const existingActiveLease = await prisma.lease.findFirst({
       where: {

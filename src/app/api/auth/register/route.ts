@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
+import { enforceRateLimit } from "@/lib/api-rate-limit"
 
 // ADMIN ne peut jamais être choisi à l'inscription publique
 const registerSchema = z.object({
@@ -14,6 +15,9 @@ const registerSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const limited = enforceRateLimit(request, "register")
+    if (limited) return limited
+
     const parsed = registerSchema.safeParse(await request.json())
 
     if (!parsed.success) {
