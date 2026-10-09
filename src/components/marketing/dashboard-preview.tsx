@@ -1,21 +1,34 @@
 import { Building2, FileText, Wallet } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { getLocale, getTranslations } from "next-intl/server"
+import { StatusBadge } from "@/components/shared/status-badge"
 import { formatCurrency } from "@/lib/utils"
 
-const stats = [
-  { label: "Biens", value: "12", icon: Building2, tone: "bg-primary/10 text-primary" },
-  { label: "Baux actifs", value: "10", icon: FileText, tone: "bg-info/10 text-info" },
-  { label: "Loyers du mois", value: formatCurrency(1850000), icon: Wallet, tone: "bg-success/10 text-success" },
-]
-
 const rows = [
-  { property: "Résidence Les Palmiers, A3", tenant: "A. Mbarga", amount: 250000, status: "Payé", variant: "success" as const },
-  { property: "Villa Bastos", tenant: "C. Nkoulou", amount: 450000, status: "En attente", variant: "muted" as const },
-  { property: "Studio Bonapriso", tenant: "F. Tchamba", amount: 150000, status: "En retard", variant: "danger" as const },
-]
+  { property: "Résidence Les Palmiers, A3", tenant: "A. Mbarga", amount: 250000, status: "PAID", label: "paid" },
+  { property: "Villa Bastos", tenant: "C. Nkoulou", amount: 450000, status: "PENDING", label: "pending" },
+  { property: "Studio Bonapriso", tenant: "F. Tchamba", amount: 150000, status: "OVERDUE", label: "overdue" },
+] as const
+
+/** "Octobre 2026" / "October 2026": month label in the page locale. */
+function monthLabel(locale: string, date: Date) {
+  const label = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric", timeZone: "UTC" }).format(date)
+  return label.charAt(0).toLocaleUpperCase(locale) + label.slice(1)
+}
 
 /** Static, illustrative snapshot of the dashboard used in the hero. */
-export function DashboardPreview() {
+export async function DashboardPreview() {
+  const [t, tStatus, locale] = await Promise.all([
+    getTranslations("landing.dashboardPreview"),
+    getTranslations("landing.status"),
+    getLocale(),
+  ])
+
+  const stats = [
+    { label: t("properties"), value: "12", icon: Building2, tone: "bg-primary/10 text-primary" },
+    { label: t("activeLeases"), value: "10", icon: FileText, tone: "bg-info/10 text-info" },
+    { label: t("monthlyRent"), value: formatCurrency(1850000), icon: Wallet, tone: "bg-success/10 text-success" },
+  ]
+
   return (
     <div
       aria-hidden
@@ -23,11 +36,11 @@ export function DashboardPreview() {
     >
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold">Tableau de bord</p>
-          <p className="text-xs text-muted-foreground">Octobre 2026</p>
+          <p className="text-sm font-semibold">{t("title")}</p>
+          <p className="text-xs text-muted-foreground">{monthLabel(locale, new Date(Date.UTC(2026, 9, 1)))}</p>
         </div>
         <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
-          Taux d&apos;occupation 83 %
+          {t("occupancy", { rate: 83 })}
         </span>
       </div>
 
@@ -56,7 +69,7 @@ export function DashboardPreview() {
               <span className="hidden text-sm font-medium tabular-nums sm:inline">
                 {formatCurrency(r.amount)}
               </span>
-              <Badge variant={r.variant}>{r.status}</Badge>
+              <StatusBadge kind="payment" status={r.status} label={tStatus(r.label)} />
             </div>
           </div>
         ))}

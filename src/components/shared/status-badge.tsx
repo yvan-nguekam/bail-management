@@ -58,13 +58,15 @@ export function statusLabel(kind: StatusKind, status: string) {
 interface StatusBadgeProps extends Omit<React.ComponentProps<typeof Badge>, "variant"> {
   kind: StatusKind
   status: string
+  /** Overrides the default (French) label, e.g. with a translated one */
+  label?: string
 }
 
-export function StatusBadge({ kind, status, ...props }: StatusBadgeProps) {
+export function StatusBadge({ kind, status, label, ...props }: StatusBadgeProps) {
   const meta = STATUS[kind][status] ?? { label: status, variant: "outline" as Variant }
   return (
     <Badge variant={meta.variant} {...props}>
-      {meta.label}
+      {label ?? meta.label}
     </Badge>
   )
 }

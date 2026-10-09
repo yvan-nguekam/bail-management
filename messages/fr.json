@@ -178,5 +178,120 @@
     "leaseExpiring": "Bail expirant",
     "maintenanceRequest": "Demande de maintenance",
     "newMessage": "Nouveau message"
+  },
+  "landing": {
+    "meta": {
+      "title": "RentalManager — Gestion locative simplifiée",
+      "description": "Biens, baux, loyers et locataires au même endroit. La plateforme de gestion locative pour les propriétaires et gestionnaires."
+    },
+    "header": {
+      "nav": "Navigation principale",
+      "home": "RentalManager, accueil",
+      "login": "Connexion",
+      "getStarted": "Commencer",
+      "language": "Langue : {language}"
+    },
+    "hero": {
+      "eyebrow": "Pour propriétaires, bailleurs et gestionnaires",
+      "title": "Gérez vos biens locatifs sans effort",
+      "subtitle": "Biens, baux, loyers et locataires réunis dans un seul outil clair. Moins de tableurs, moins d'oublis, plus de loyers encaissés à temps.",
+      "primaryCta": "Commencer gratuitement",
+      "secondaryCta": "J'ai déjà un compte",
+      "highlights": {
+        "currency": "Loyers en FCFA",
+        "contracts": "Contrats PDF",
+        "reminders": "Rappels automatiques"
+      }
+    },
+    "status": {
+      "active": "Actif",
+      "paid": "Payé",
+      "pending": "En attente",
+      "overdue": "En retard",
+      "held": "Détenue"
+    },
+    "dashboardPreview": {
+      "title": "Tableau de bord",
+      "occupancy": "Taux d'occupation {rate} %",
+      "properties": "Biens",
+      "activeLeases": "Baux actifs",
+      "monthlyRent": "Loyers du mois"
+    },
+    "steps": {
+      "eyebrow": "Comment ça marche",
+      "title": "Opérationnel en trois étapes",
+      "properties": {
+        "title": "Ajoutez vos biens",
+        "description": "Renseignez vos logements en quelques minutes : adresse, loyer, caution."
+      },
+      "leases": {
+        "title": "Créez vos baux",
+        "description": "Associez un locataire, fixez les dates et téléchargez le contrat prêt à signer."
+      },
+      "rent": {
+        "title": "Suivez vos loyers",
+        "description": "Enregistrez les paiements, relancez les retards et exportez vos rapports."
+      }
+    },
+    "leasePreview": {
+      "lease": "Bail — {property}",
+      "tenant": "Locataire",
+      "period": "Période",
+      "monthlyRent": "Loyer mensuel",
+      "deposit": "Caution",
+      "schedule": "Échéancier",
+      "collected": "{paid}/{total} loyers encaissés",
+      "download": "Télécharger le contrat",
+      "summary": "Illustration d'un bail dans RentalManager : {property}, loué à {tenant} du {start} au {end}, loyer mensuel de {rent}, caution de {deposit} détenue. L'échéancier indique {paid} loyers encaissés sur {total}, et le contrat est téléchargeable en PDF."
+    },
+    "features": {
+      "eyebrow": "Fonctionnalités",
+      "title": "Tout ce qu'il faut pour gérer vos locations",
+      "subtitle": "Des outils simples, pensés pour le quotidien d'un bailleur : du premier bail jusqu'à la restitution de la caution.",
+      "properties": {
+        "title": "Gestion des biens",
+        "description": "Centralisez vos appartements, maisons et locaux avec leurs informations et photos."
+      },
+      "tenants": {
+        "title": "Suivi des locataires",
+        "description": "Retrouvez chaque locataire, son bail et l'historique de ses paiements."
+      },
+      "leases": {
+        "title": "Baux et contrats",
+        "description": "Créez vos baux, générez le contrat en PDF et suivez les échéances."
+      },
+      "finance": {
+        "title": "Vue financière",
+        "description": "Suivez les loyers encaissés, les impayés et exportez vos rapports."
+      },
+      "maintenance": {
+        "title": "Demandes de maintenance",
+        "description": "Recevez, priorisez et clôturez les interventions sans perdre le fil."
+      },
+      "messaging": {
+        "title": "Messagerie intégrée",
+        "description": "Échangez avec vos locataires directement depuis la plateforme."
+      },
+      "reminders": {
+        "title": "Rappels automatiques",
+        "description": "Soyez prévenu des loyers à venir, des baux qui expirent et des travaux."
+      },
+      "security": {
+        "title": "Données protégées",
+        "description": "Accès par rôle, données chiffrées et sauvegardées en continu."
+      }
+    },
+    "cta": {
+      "title": "Prêt à reprendre le contrôle de vos loyers ?",
+      "subtitle": "Créez votre compte en deux minutes. Aucune carte bancaire requise.",
+      "primary": "Créer mon compte",
+      "secondary": "Se connecter"
+    },
+    "footer": {
+      "nav": "Liens de pied de page",
+      "login": "Se connecter",
+      "register": "Créer un compte",
+      "rights": "© {year} RentalManager. Tous droits réservés."
+    }
   }
 }
