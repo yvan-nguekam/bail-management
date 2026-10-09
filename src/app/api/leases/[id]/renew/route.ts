@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { notify } from "@/lib/notify";
+import { absoluteUrl, buildEmailSubject } from "@/lib/notification-preferences";
+import { LeaseUpdateEmail } from "@/emails/lease-update";
 import { syncLeaseSchedule } from "@/lib/lease-schedule";
 import { addUtcDays } from "@/lib/payment-schedule";
 
@@ -153,13 +156,25 @@ export async function POST(
     });
 
     // Créer une notification pour le locataire
-    await prisma.notification.create({
-      data: {
-        userId: lease.tenantId,
-        type: "LEASE_RENEWED",
-        title: "Bail renouvelé",
-        message: `Votre bail pour ${lease.property.name} a été renouvelé`,
-        relatedId: newLease.id,
+    await notify({
+      userId: lease.tenantId,
+      type: "LEASE_RENEWED",
+      title: "Bail renouvelé",
+      message: `Votre bail pour ${lease.property.name} a été renouvelé`,
+      relatedId: newLease.id,
+      link: `/leases/${newLease.id}`,
+      email: {
+        subject: buildEmailSubject("Bail renouvelé", lease.property.name),
+        react: (recipient) =>
+          LeaseUpdateEmail({
+            kind: "renewed",
+            recipientName: recipient.name,
+            propertyName: lease.property.name,
+            startDate: newLease.startDate,
+            endDate: newLease.endDate,
+            monthlyRent: newLease.monthlyRent,
+            leaseUrl: absoluteUrl(`/leases/${newLease.id}`),
+          }),
       },
     });
 

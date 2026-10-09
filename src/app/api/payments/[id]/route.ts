@@ -3,6 +3,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { notify } from "@/lib/notify";
+import { formatCurrency } from "@/lib/utils";
+import { absoluteUrl, buildEmailSubject } from "@/lib/notification-preferences";
+import { PaymentReceivedEmail } from "@/emails/payment-received";
 
 // Schema de validation pour mise à jour
 const updatePaymentSchema = z.object({
@@ -181,13 +185,25 @@ export async function PUT(
       validatedData.status === "PAID" &&
       existingPayment.status !== "PAID"
     ) {
-      await prisma.notification.create({
-        data: {
-          userId: existingPayment.lease.tenantId,
-          type: "PAYMENT_RECEIVED",
-          title: "Paiement confirmé",
-          message: `Votre paiement de ${payment.amount.toLocaleString()} FCFA a été confirmé`,
-          relatedId: payment.id,
+      await notify({
+        userId: existingPayment.lease.tenantId,
+        type: "PAYMENT_RECEIVED",
+        title: "Paiement confirmé",
+        message: `Votre paiement de ${formatCurrency(payment.amount)} a été confirmé`,
+        relatedId: payment.id,
+        link: `/payments/${payment.id}`,
+        email: {
+          subject: buildEmailSubject("Paiement confirmé", existingPayment.lease.property.name),
+          react: (recipient) =>
+            PaymentReceivedEmail({
+              tenantName: recipient.name,
+              propertyName: existingPayment.lease.property.name,
+              amount: payment.amount,
+              paidDate: payment.paidDate,
+              paymentMethod: payment.paymentMethod,
+              reference: payment.reference,
+              paymentUrl: absoluteUrl(`/payments/${payment.id}`),
+            }),
         },
       });
     }
