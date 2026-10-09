@@ -14,6 +14,7 @@ import { toast } from "sonner"
 export default function LoginPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -22,6 +23,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    setFormError(null)
 
     try {
       const result = await signIn("credentials", {
@@ -30,8 +32,12 @@ export default function LoginPage() {
         redirect: false,
       })
 
-      if (result?.error) {
-        toast.error("Identifiants invalides")
+      if (result?.error === "RATE_LIMITED") {
+        setFormError(
+          "Trop de tentatives de connexion. Réessayez dans 15 minutes ou réinitialisez votre mot de passe."
+        )
+      } else if (result?.error) {
+        setFormError("Adresse e-mail ou mot de passe incorrect.")
       } else {
         toast.success("Content de vous revoir !")
         router.push("/dashboard")
@@ -94,6 +100,14 @@ export default function LoginPage() {
             className="h-11"
           />
         </div>
+        {formError && (
+          <p
+            role="alert"
+            className="rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {formError}
+          </p>
+        )}
         <Button type="submit" className="h-11 w-full" disabled={isLoading}>
           {isLoading ? (
             <>

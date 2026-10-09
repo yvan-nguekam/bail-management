@@ -92,19 +92,19 @@ export function ManageRequestCard({ request, onUpdated }: ManageRequestCardProps
   });
 
   useEffect(() => {
-    // Intervenants possibles : utilisateurs non locataires (admin, propriétaires, gestionnaires)
+    // Intervenants possibles : équipe du bien (propriétaire, gestionnaire) et admin appelant
     const fetchAssignees = async () => {
       try {
-        const response = await fetch("/api/users");
+        const response = await fetch(`/api/maintenance/${request.id}/assignees`);
         if (!response.ok) return;
         const users: AssigneeOption[] = await response.json();
-        setAssignees(users.filter((u) => u.role !== "TENANT"));
+        setAssignees(users);
       } catch {
         // Liste vide : l'assignation reste possible via l'intervenant actuel
       }
     };
     fetchAssignees();
-  }, []);
+  }, [request.id]);
 
   // Garder l'intervenant actuel sélectionnable même s'il n'est pas dans la liste
   const assigneeOptions =
