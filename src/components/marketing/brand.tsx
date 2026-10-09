@@ -7,12 +7,14 @@ interface BrandProps {
   className?: string
   /** Classes for the wordmark, e.g. to hide it on the narrowest screens */
   wordmarkClassName?: string
+  /** Accessible name of the home link (translated on the landing page) */
+  label?: string
 }
 
 /** Logo + wordmark, same treatment as the dashboard sidebar. */
-export function Brand({ href = "/", className, wordmarkClassName }: BrandProps) {
+export function Brand({ href = "/", className, wordmarkClassName, label = "RentalManager, accueil" }: BrandProps) {
   return (
-    <Link href={href} className={cn("flex items-center gap-2.5", className)} aria-label="RentalManager, accueil">
+    <Link href={href} className={cn("flex items-center gap-2.5", className)} aria-label={label}>
       <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
         <Building2 className="h-4 w-4" aria-hidden />
       </span>

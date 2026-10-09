@@ -178,5 +178,120 @@
     "leaseExpiring": "Lease Expiring",
     "maintenanceRequest": "Maintenance Request",
     "newMessage": "New Message"
+  },
+  "landing": {
+    "meta": {
+      "title": "RentalManager — Property management made simple",
+      "description": "Properties, leases, rent and tenants in one place. The rental management platform for landlords and property managers."
+    },
+    "header": {
+      "nav": "Main navigation",
+      "home": "RentalManager, home",
+      "login": "Log in",
+      "getStarted": "Get started",
+      "language": "Language: {language}"
+    },
+    "hero": {
+      "eyebrow": "For owners, landlords and property managers",
+      "title": "Manage your rental properties with ease",
+      "subtitle": "Properties, leases, rent and tenants together in one clear tool. Fewer spreadsheets, fewer missed deadlines, more rent collected on time.",
+      "primaryCta": "Get started for free",
+      "secondaryCta": "I already have an account",
+      "highlights": {
+        "currency": "Rent in FCFA",
+        "contracts": "PDF contracts",
+        "reminders": "Automatic reminders"
+      }
+    },
+    "status": {
+      "active": "Active",
+      "paid": "Paid",
+      "pending": "Pending",
+      "overdue": "Overdue",
+      "held": "Held"
+    },
+    "dashboardPreview": {
+      "title": "Dashboard",
+      "occupancy": "Occupancy rate {rate}%",
+      "properties": "Properties",
+      "activeLeases": "Active leases",
+      "monthlyRent": "Rent this month"
+    },
+    "steps": {
+      "eyebrow": "How it works",
+      "title": "Up and running in three steps",
+      "properties": {
+        "title": "Add your properties",
+        "description": "Enter your units in minutes: address, rent and deposit."
+      },
+      "leases": {
+        "title": "Create your leases",
+        "description": "Assign a tenant, set the dates and download a contract ready to sign."
+      },
+      "rent": {
+        "title": "Track your rent",
+        "description": "Record payments, follow up on late rent and export your reports."
+      }
+    },
+    "leasePreview": {
+      "lease": "Lease — {property}",
+      "tenant": "Tenant",
+      "period": "Term",
+      "monthlyRent": "Monthly rent",
+      "deposit": "Deposit",
+      "schedule": "Payment schedule",
+      "collected": "{paid}/{total} rent payments collected",
+      "download": "Download contract",
+      "summary": "Illustration of a lease in RentalManager: {property}, let to {tenant} from {start} to {end}, monthly rent of {rent}, deposit of {deposit} held. The payment schedule shows {paid} of {total} rent payments collected, and the contract can be downloaded as a PDF."
+    },
+    "features": {
+      "eyebrow": "Features",
+      "title": "Everything you need to manage your rentals",
+      "subtitle": "Simple tools built for a landlord's day-to-day, from the first lease to the return of the deposit.",
+      "properties": {
+        "title": "Property management",
+        "description": "Keep your apartments, houses and commercial units in one place, with their details and photos."
+      },
+      "tenants": {
+        "title": "Tenant tracking",
+        "description": "Find every tenant, their lease and their full payment history."
+      },
+      "leases": {
+        "title": "Leases and contracts",
+        "description": "Create leases, generate the PDF contract and keep track of key dates."
+      },
+      "finance": {
+        "title": "Financial overview",
+        "description": "Monitor collected rent and arrears, and export your reports."
+      },
+      "maintenance": {
+        "title": "Maintenance requests",
+        "description": "Receive, prioritize and close work orders without losing track."
+      },
+      "messaging": {
+        "title": "Built-in messaging",
+        "description": "Talk to your tenants directly from the platform."
+      },
+      "reminders": {
+        "title": "Automatic reminders",
+        "description": "Get notified about upcoming rent, expiring leases and scheduled work."
+      },
+      "security": {
+        "title": "Protected data",
+        "description": "Role-based access, encrypted data and continuous backups."
+      }
+    },
+    "cta": {
+      "title": "Ready to take back control of your rent?",
+      "subtitle": "Create your account in two minutes. No credit card required.",
+      "primary": "Create my account",
+      "secondary": "Log in"
+    },
+    "footer": {
+      "nav": "Footer links",
+      "login": "Log in",
+      "register": "Create an account",
+      "rights": "© {year} RentalManager. All rights reserved."
+    }
   }
 }
