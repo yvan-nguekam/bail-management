@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { notify } from "@/lib/notify";
+import { absoluteUrl, buildEmailSubject } from "@/lib/notification-preferences";
+import { MaintenanceUpdateEmail } from "@/emails/maintenance-update";
 import { Prisma } from "@prisma/client";
 import {
   canDeleteRequest,
@@ -173,14 +176,25 @@ export async function PUT(
       validatedData.status !== existing.status &&
       existing.tenantId !== session.user.id
     ) {
-      await prisma.notification.create({
-        data: {
-          userId: existing.tenantId,
-          type: "MAINTENANCE_UPDATE",
-          title: "Mise à jour demande de maintenance",
-          message: `Votre demande "${existing.title}" est maintenant : ${maintenanceStatusLabels[validatedData.status]}`,
-          relatedId: updated.id,
-          link: `/maintenance/${updated.id}`,
+      const statusLabel = maintenanceStatusLabels[validatedData.status];
+      await notify({
+        userId: existing.tenantId,
+        type: "MAINTENANCE_UPDATE",
+        title: "Mise à jour demande de maintenance",
+        message: `Votre demande "${existing.title}" est maintenant : ${statusLabel}`,
+        relatedId: updated.id,
+        link: `/maintenance/${updated.id}`,
+        email: {
+          subject: buildEmailSubject(`Demande de maintenance : ${statusLabel}`, existing.title),
+          react: (recipient) =>
+            MaintenanceUpdateEmail({
+              kind: "status",
+              recipientName: recipient.name,
+              requestTitle: existing.title,
+              propertyName: updated.property.name,
+              statusLabel,
+              requestUrl: absoluteUrl(`/maintenance/${updated.id}`),
+            }),
         },
       });
     }
@@ -191,14 +205,23 @@ export async function PUT(
       validatedData.assignedToId !== existing.assignedToId &&
       validatedData.assignedToId !== session.user.id
     ) {
-      await prisma.notification.create({
-        data: {
-          userId: validatedData.assignedToId,
-          type: "MAINTENANCE_UPDATE",
-          title: "Demande de maintenance assignée",
-          message: `La demande "${existing.title}" vous a été assignée`,
-          relatedId: updated.id,
-          link: `/maintenance/${updated.id}`,
+      await notify({
+        userId: validatedData.assignedToId,
+        type: "MAINTENANCE_UPDATE",
+        title: "Demande de maintenance assignée",
+        message: `La demande "${existing.title}" vous a été assignée`,
+        relatedId: updated.id,
+        link: `/maintenance/${updated.id}`,
+        email: {
+          subject: buildEmailSubject("Demande de maintenance assignée", existing.title),
+          react: (recipient) =>
+            MaintenanceUpdateEmail({
+              kind: "assigned",
+              recipientName: recipient.name,
+              requestTitle: existing.title,
+              propertyName: updated.property.name,
+              requestUrl: absoluteUrl(`/maintenance/${updated.id}`),
+            }),
         },
       });
     }

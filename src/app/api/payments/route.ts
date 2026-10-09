@@ -3,6 +3,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { notify } from "@/lib/notify";
+import { formatCurrency } from "@/lib/utils";
+import { absoluteUrl, buildEmailSubject } from "@/lib/notification-preferences";
+import { PaymentReminderEmail } from "@/emails/payment-reminder";
 
 // Schema de validation pour un paiement
 const paymentSchema = z.object({
@@ -220,13 +224,23 @@ export async function POST(request: NextRequest) {
     });
 
     // Créer une notification pour le locataire
-    await prisma.notification.create({
-      data: {
-        userId: lease.tenantId,
-        type: "PAYMENT_REMINDER",
-        title: "Nouveau paiement à effectuer",
-        message: `Un paiement de ${payment.amount.toLocaleString()} FCFA est dû le ${dueDate.toLocaleDateString("fr-FR")}`,
-        relatedId: payment.id,
+    await notify({
+      userId: lease.tenantId,
+      type: "PAYMENT_REMINDER",
+      title: "Nouveau paiement à effectuer",
+      message: `Un paiement de ${formatCurrency(payment.amount)} est dû le ${dueDate.toLocaleDateString("fr-FR")}`,
+      relatedId: payment.id,
+      link: `/payments/${payment.id}`,
+      email: {
+        subject: buildEmailSubject("Nouveau loyer à régler", lease.property.name),
+        react: (recipient) =>
+          PaymentReminderEmail({
+            tenantName: recipient.name,
+            propertyName: lease.property.name,
+            amount: payment.amount,
+            dueDate,
+            paymentUrl: absoluteUrl(`/payments/${payment.id}`),
+          }),
       },
     });
 

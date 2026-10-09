@@ -7,7 +7,8 @@ import { PageHeader } from "@/components/shared/page-header"
 import { ProfileForm, type Profile } from "@/components/settings/profile-form"
 import { PasswordForm } from "@/components/settings/password-form"
 import { PreferencesPanel } from "@/components/settings/preferences-panel"
-import { KeyRound, SlidersHorizontal, User } from "lucide-react"
+import { NotificationPreferencesPanel } from "@/components/settings/notification-preferences-panel"
+import { Bell, KeyRound, SlidersHorizontal, User } from "lucide-react"
 import { toast } from "sonner"
 
 function SettingsSkeleton() {
@@ -29,8 +30,14 @@ function SettingsSkeleton() {
 export default function SettingsPage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  // Onglet ouvert via ?tab=… (ex. lien "Gérer mes préférences" des e-mails)
+  const [initialTab, setInitialTab] = useState("profile")
 
   useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab")
+    if (tab && ["profile", "security", "preferences", "notifications"].includes(tab)) {
+      setInitialTab(tab)
+    }
     const load = async () => {
       try {
         const response = await fetch("/api/users/me")
@@ -53,7 +60,7 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <PageHeader title="Paramètres" description="Votre profil, votre sécurité et vos préférences" />
 
-      <Tabs defaultValue="profile" className="gap-6">
+      <Tabs defaultValue={initialTab} className="gap-6">
         <TabsList aria-label="Sections des paramètres" className="w-full sm:w-auto">
           <TabsTrigger value="profile">
             <User aria-hidden />
@@ -67,6 +74,10 @@ export default function SettingsPage() {
             <SlidersHorizontal aria-hidden />
             Préférences
           </TabsTrigger>
+          <TabsTrigger value="notifications">
+            <Bell aria-hidden />
+            Notifications
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="profile">
           <ProfileForm profile={profile} onSaved={setProfile} />
@@ -76,6 +87,9 @@ export default function SettingsPage() {
         </TabsContent>
         <TabsContent value="preferences">
           <PreferencesPanel />
+        </TabsContent>
+        <TabsContent value="notifications">
+          <NotificationPreferencesPanel />
         </TabsContent>
       </Tabs>
     </div>

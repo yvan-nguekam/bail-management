@@ -134,6 +134,7 @@ pnpm start            # Lancer en production
 pnpm lint             # Linter
 pnpm test             # Tests unitaires
 pnpm test:e2e         # Tests E2E
+pnpm email:dev        # Aperçu des templates d'e-mails (React Email, port 3001)
 pnpm db:migrate       # Créer/appliquer une migration en local (schéma modifié)
 pnpm db:deploy        # Appliquer les migrations en attente (CI, Vercel, Supabase)
 pnpm db:seed          # Charger les données de test (efface les données existantes)
@@ -199,7 +200,7 @@ Obligatoires :
 
 Optionnelles :
 - `CRON_SECRET` (tâches planifiées, voir ci-dessous)
-- `RESEND_API_KEY` (emails)
+- `RESEND_API_KEY`, `EMAIL_FROM`, `APP_URL` (e-mails, voir « E-mails » ci-dessous)
 - `UPLOADTHING_*` (upload fichiers)
 - `STRIPE_*` (paiements)
 
@@ -348,6 +349,36 @@ En local, avec l'application lancée (`pnpm dev`) et `CRON_SECRET` dans `.env` :
 ```bash
 pnpm cron:lease-status
 ```
+
+## ✉️ E-mails
+
+Chaque notification in-app passe par `notify()` (`src/lib/notify.ts`) : la notification est
+toujours créée, et un e-mail (templates React Email en français dans `src/emails/`) part si le
+destinataire l'accepte. Chaque utilisateur règle ses e-mails dans **Paramètres > Notifications**
+(interrupteur général + paiements, baux et caution, maintenance, messages).
+
+E-mails envoyés : loyer à régler, loyer en retard, paiement confirmé, fin de bail proche
+(60/30 j), bail expiré, bail créé / en vigueur / renouvelé / résilié, caution reçue / restituée,
+nouveau message, demande de maintenance (création, statut, commentaire, assignation).
+
+**Configuration Resend**
+1. Créer un compte sur [resend.com](https://resend.com) et une clé API → `RESEND_API_KEY`.
+2. *Domains > Add domain* : ajouter le domaine d'envoi et créer chez le registrar les
+   enregistrements DNS indiqués (SPF/DKIM, MX de retour), puis attendre le statut *Verified*.
+3. `EMAIL_FROM="RentalManager <notifications@votre-domaine.com>"` (domaine vérifié) et
+   `APP_URL` = URL publique de l'application (liens des e-mails ; défaut : `NEXTAUTH_URL`).
+
+Sans domaine vérifié, l'expéditeur `onboarding@resend.dev` n'envoie qu'à l'adresse du compte
+Resend (pratique pour tester).
+
+**Sans `RESEND_API_KEY`** rien n'est envoyé et rien ne casse : en développement, chaque e-mail
+(destinataire, objet, aperçu texte) est affiché dans la console du serveur. Un envoi en échec
+n'interrompt jamais l'opération (paiement, message, tâche planifiée…) : il est seulement journalisé.
+
+**Prévisualiser les templates** : `pnpm email:dev` lance l'aperçu React Email sur
+http://localhost:3001 (au premier lancement, la CLI propose d'installer
+`@react-email/preview-server`). Les tests `src/emails/__tests__` rendent aussi chaque template ;
+`EMAIL_RENDER_DIR=/tmp/emails pnpm test src/emails` en écrit le HTML dans le dossier indiqué.
 
 ## 🚢 Déploiement
 

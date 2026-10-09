@@ -3,6 +3,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { notify } from "@/lib/notify";
+import { formatCurrency } from "@/lib/utils";
+import { absoluteUrl, buildEmailSubject } from "@/lib/notification-preferences";
+import { PaymentReceivedEmail } from "@/emails/payment-received";
 
 const markPaidSchema = z.object({
   paymentMethod: z.enum(["CASH", "BANK_TRANSFER", "CREDIT_CARD", "CHECK", "MOBILE_MONEY"]),
@@ -109,13 +113,25 @@ export async function POST(
     });
 
     // Créer une notification pour le locataire
-    await prisma.notification.create({
-      data: {
-        userId: payment.lease.tenantId,
-        type: "PAYMENT_RECEIVED",
-        title: "Paiement confirmé",
-        message: `Votre paiement de ${payment.amount.toLocaleString()} FCFA pour ${payment.lease.property.name} a été confirmé`,
-        relatedId: payment.id,
+    await notify({
+      userId: payment.lease.tenantId,
+      type: "PAYMENT_RECEIVED",
+      title: "Paiement confirmé",
+      message: `Votre paiement de ${formatCurrency(payment.amount)} pour ${payment.lease.property.name} a été confirmé`,
+      relatedId: payment.id,
+      link: `/payments/${payment.id}`,
+      email: {
+        subject: buildEmailSubject("Paiement confirmé", payment.lease.property.name),
+        react: (recipient) =>
+          PaymentReceivedEmail({
+            tenantName: recipient.name,
+            propertyName: payment.lease.property.name,
+            amount: payment.amount,
+            paidDate: paidDateTime,
+            paymentMethod,
+            reference: transactionId,
+            paymentUrl: absoluteUrl(`/payments/${payment.id}`),
+          }),
       },
     });
 

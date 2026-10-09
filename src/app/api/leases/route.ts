@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { notify } from "@/lib/notify";
+import { absoluteUrl, buildEmailSubject } from "@/lib/notification-preferences";
+import { LeaseUpdateEmail } from "@/emails/lease-update";
 import { syncLeaseSchedule } from "@/lib/lease-schedule";
 
 // Schema de validation pour un bail
@@ -251,13 +254,25 @@ export async function POST(request: NextRequest) {
     });
 
     // Créer une notification pour le locataire
-    await prisma.notification.create({
-      data: {
-        userId: validatedData.tenantId,
-        type: "LEASE_CREATED",
-        title: "Nouveau bail",
-        message: `Un nouveau bail a été créé pour ${property.name}`,
-        relatedId: lease.id,
+    await notify({
+      userId: validatedData.tenantId,
+      type: "LEASE_CREATED",
+      title: "Nouveau bail",
+      message: `Un nouveau bail a été créé pour ${property.name}`,
+      relatedId: lease.id,
+      link: `/leases/${lease.id}`,
+      email: {
+        subject: buildEmailSubject("Nouveau bail", property.name),
+        react: (recipient) =>
+          LeaseUpdateEmail({
+            kind: "created",
+            recipientName: recipient.name,
+            propertyName: property.name,
+            startDate: lease.startDate,
+            endDate: lease.endDate,
+            monthlyRent: lease.monthlyRent,
+            leaseUrl: absoluteUrl(`/leases/${lease.id}`),
+          }),
       },
     });
 

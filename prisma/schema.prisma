@@ -107,6 +107,15 @@ model User {
   role          UserRole  @default(TENANT)
   avatar        String?
   emailVerified DateTime?
+
+  // Préférences e-mail : interrupteur général + désinscription par catégorie.
+  // Les notifications in-app sont toujours créées, seuls les e-mails en dépendent.
+  emailNotifications Boolean @default(true)
+  emailPayments      Boolean @default(true)
+  emailLeases        Boolean @default(true)
+  emailMaintenance   Boolean @default(true)
+  emailMessages      Boolean @default(true)
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
