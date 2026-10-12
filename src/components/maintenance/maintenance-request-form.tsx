@@ -39,8 +39,10 @@ import {
   isStaffRole,
   maintenancePriorityLabels,
 } from "@/lib/maintenance";
-import { Building2, FileText, Loader2, SlidersHorizontal } from "lucide-react";
+import { Building2, FileText, ImageIcon, Loader2, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
+import { PendingImagesPicker } from "@/components/uploads/pending-images-picker";
+import { startUpload, uploadErrorMessage } from "@/lib/uploadthing";
 
 // Valeurs sentinelles (Radix Select n'accepte pas de valeur vide)
 const SELF = "self";
@@ -87,6 +89,7 @@ export function MaintenanceRequestForm() {
   const [properties, setProperties] = useState<PropertyOption[]>([]);
   const [loadingProperties, setLoadingProperties] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [photos, setPhotos] = useState<File[]>([]);
 
   const form = useForm<RequestFormData>({
     resolver: zodResolver(requestSchema),
@@ -146,6 +149,16 @@ export function MaintenanceRequestForm() {
       }
 
       const created = await response.json();
+
+      // Photos envoyées une fois la demande créée (la route d'envoi vérifie l'accès à la demande)
+      if (photos.length > 0) {
+        try {
+          await startUpload("maintenanceImage", photos, { requestId: created.id });
+        } catch (error) {
+          toast.error(`Demande créée, mais les photos n'ont pas pu être envoyées : ${uploadErrorMessage(error)}`);
+        }
+      }
+
       toast.success("Demande créée avec succès");
       router.push(`/maintenance/${created.id}`);
     } catch (error) {
@@ -362,9 +375,29 @@ export function MaintenanceRequestForm() {
           </CardContent>
         </Card>
 
+        <Card className="animate-fade-up" style={{ "--stagger": 4 } as React.CSSProperties}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ImageIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+              Photos (optionnel)
+            </CardTitle>
+            <CardDescription>
+              Une photo du problème aide l&apos;intervenant à préparer son passage.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PendingImagesPicker
+              endpoint="maintenanceImage"
+              files={photos}
+              onChange={setPhotos}
+              disabled={isSubmitting}
+            />
+          </CardContent>
+        </Card>
+
         <div
           className="animate-fade-up flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"
-          style={{ "--stagger": 4 } as React.CSSProperties}
+          style={{ "--stagger": 5 } as React.CSSProperties}
         >
           <Button
             type="button"

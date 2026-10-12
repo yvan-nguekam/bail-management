@@ -34,6 +34,7 @@ export interface MaintenanceComment {
   authorRole: UserRoleValue;
   createdAt: string;
   author: UserSummary;
+  images?: string[];
 }
 
 export interface MaintenanceDetail {
@@ -63,4 +64,5 @@ export interface MaintenanceDetail {
   tenant: UserSummary;
   assignedTo: UserSummary | null;
   comments: MaintenanceComment[];
+  images?: string[];
 }

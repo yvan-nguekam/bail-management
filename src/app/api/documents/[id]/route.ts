@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canDeleteDocument } from "@/lib/documents";
+import { deleteRemoteFiles } from "@/lib/remote-files";
 
 // DELETE /api/documents/[id] - Auteur du dépôt, propriétaire / gestionnaire du bien, ou admin
 export async function DELETE(
@@ -22,6 +23,7 @@ export async function DELETE(
       select: {
         id: true,
         name: true,
+        fileKey: true,
         uploadedById: true,
         property: { select: { ownerId: true, managerId: true } },
         lease: { select: { property: { select: { ownerId: true, managerId: true } } } },
@@ -37,6 +39,9 @@ export async function DELETE(
     }
 
     await prisma.document.delete({ where: { id } });
+
+    // Fichier téléversé : suppression chez Uploadthing, sans faire échouer la suppression en base
+    await deleteRemoteFiles([document.fileKey]);
 
     await prisma.activity.create({
       data: {

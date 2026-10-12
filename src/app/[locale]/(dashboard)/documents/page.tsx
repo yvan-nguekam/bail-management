@@ -44,6 +44,7 @@ import {
   documentTypeLabel,
   documentTypeLabels,
   formatFileSize,
+  isAllowedDocumentUrl,
   type DocumentIconKind,
 } from "@/lib/documents"
 import {
@@ -68,6 +69,7 @@ interface DocumentItem {
   url: string
   size: number
   mimeType: string
+  fileKey?: string | null
   propertyId: string | null
   leaseId: string | null
   createdAt: string
@@ -185,7 +187,7 @@ export default function DocumentsPage() {
         actions={
           <Button onClick={() => setAddOpen(true)}>
             <Plus className="h-4 w-4" aria-hidden />
-            Ajouter par lien
+            Ajouter un document
           </Button>
         }
       />
@@ -243,7 +245,7 @@ export default function DocumentsPage() {
                   ? "Aucun document ne correspond à ces filtres."
                   : isTenant
                     ? "Les documents liés à votre bail apparaîtront ici."
-                    : "Ajoutez un premier document par lien pour constituer votre bibliothèque."
+                    : "Téléversez ou référencez un premier document pour constituer votre bibliothèque."
               }
               action={
                 hasFilters ? (
@@ -259,7 +261,7 @@ export default function DocumentsPage() {
                 ) : (
                   <Button onClick={() => setAddOpen(true)}>
                     <Plus className="h-4 w-4" aria-hidden />
-                    Ajouter par lien
+                    Ajouter un document
                   </Button>
                 )
               }
@@ -291,7 +293,7 @@ export default function DocumentsPage() {
                           </span>
                           <div className="min-w-0">
                             <a
-                              href={doc.url}
+                              href={isAllowedDocumentUrl(doc.url, true) ? doc.url : "#"}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="block truncate font-medium hover:text-primary"
@@ -332,7 +334,7 @@ export default function DocumentsPage() {
                         <div className="flex justify-end gap-1">
                           <Button variant="ghost" size="icon" asChild>
                             <a
-                              href={doc.url}
+                              href={isAllowedDocumentUrl(doc.url, true) ? doc.url : "#"}
                               target="_blank"
                               rel="noopener noreferrer"
                               aria-label={`Ouvrir ${doc.name} dans un nouvel onglet`}
@@ -373,8 +375,10 @@ export default function DocumentsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Supprimer ce document ?</AlertDialogTitle>
             <AlertDialogDescription>
-              « {toDelete?.name} » sera retiré de la bibliothèque. Le fichier hébergé à l&apos;adresse
-              d&apos;origine n&apos;est pas touché.
+              « {toDelete?.name} » sera retiré de la bibliothèque.{" "}
+              {toDelete?.fileKey
+                ? "Le fichier téléversé sera également supprimé."
+                : "Le fichier hébergé à l'adresse d'origine n'est pas touché."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

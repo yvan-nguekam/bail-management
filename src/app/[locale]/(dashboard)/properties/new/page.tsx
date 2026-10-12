@@ -33,6 +33,8 @@ import { PageHeader } from "@/components/shared/page-header";
 import { FormActions } from "@/components/properties/form-actions";
 import { propertyTypeLabels } from "@/components/properties/property-labels";
 import { toast } from "sonner";
+import { ImageIcon } from "lucide-react";
+import { isUploadEnabled } from "@/lib/upload-config";
 
 const propertySchema = z.object({
   name: z.string().min(1, "Le nom est requis"),
@@ -98,8 +100,14 @@ export default function NewPropertyPage() {
       }
 
       const property = await response.json();
-      toast.success("Propriété créée avec succès");
-      router.push(`/properties/${property.id}`);
+      // Étape « Ajouter des photos » : l'envoi nécessite un bien existant
+      if (isUploadEnabled()) {
+        toast.success("Bien créé. Ajoutez maintenant des photos.");
+        router.push(`/properties/${property.id}/edit#photos`);
+      } else {
+        toast.success("Propriété créée avec succès");
+        router.push(`/properties/${property.id}`);
+      }
     } catch (error) {
       console.error("Erreur:", error);
       toast.error(
@@ -365,6 +373,13 @@ export default function NewPropertyPage() {
               </div>
             </CardContent>
           </Card>
+
+          <p className="flex items-start gap-2 text-sm text-muted-foreground">
+            <ImageIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            {isUploadEnabled()
+              ? "Les photos s'ajoutent à l'étape suivante, une fois le bien créé."
+              : "Les photos pourront être ajoutées depuis la page de modification du bien une fois l'envoi de fichiers configuré."}
+          </p>
 
           <FormActions
             submitLabel="Créer le bien"

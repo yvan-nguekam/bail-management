@@ -6,11 +6,14 @@ import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/empty-state";
+import { ImageGallery } from "@/components/uploads/image-gallery";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -30,6 +33,8 @@ import {
   Mail,
   Phone,
   ArrowUpRight,
+  ImageIcon,
+  ImagePlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -204,6 +209,46 @@ export default function PropertyDetailsPage() {
         <StatusBadge kind="property" status={property.status} />
         <Badge variant="outline">{propertyTypeLabel(property.type)}</Badge>
       </PageHeader>
+
+      {property.images.length > 0 ? (
+        <Card className="animate-fade-up">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ImageIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+              Photos
+              <span className="font-normal text-muted-foreground tabular-nums">
+                ({property.images.length})
+              </span>
+            </CardTitle>
+            <CardAction>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href={`/properties/${property.id}/edit#photos`}>
+                  <Pencil aria-hidden />
+                  Gérer
+                </Link>
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            <ImageGallery images={property.images} alt={property.name} />
+          </CardContent>
+        </Card>
+      ) : (
+        <EmptyState
+          size="sm"
+          icon={ImageIcon}
+          title="Aucune photo"
+          description="Ajoutez des photos pour illustrer le bien dans la liste et sur sa fiche."
+          action={
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/properties/${property.id}/edit#photos`}>
+                <ImagePlus aria-hidden />
+                Ajouter des photos
+              </Link>
+            </Button>
+          }
+        />
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Informations principales */}

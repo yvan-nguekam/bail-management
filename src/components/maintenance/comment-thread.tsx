@@ -17,6 +17,9 @@ import { cn } from "@/lib/utils";
 import type { MaintenanceComment } from "./types";
 import { Loader2, MessageSquare, Send } from "lucide-react";
 import { toast } from "sonner";
+import { ImageGallery } from "@/components/uploads/image-gallery";
+import { PendingImagesPicker } from "@/components/uploads/pending-images-picker";
+import { startUpload, uploadErrorMessage } from "@/lib/uploadthing";
 
 function initials(name: string) {
   return (
@@ -64,6 +67,7 @@ export function CommentThread({
   const [comments, setComments] = useState(initialComments);
   const [content, setContent] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [photos, setPhotos] = useState<File[]>([]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,14 +86,26 @@ export function CommentThread({
         throw new Error(error.error || "Erreur lors de l'envoi");
       }
 
+      const created: MaintenanceComment = await response.json();
       setContent("");
+
+      // Photos jointes : envoyées une fois le commentaire créé
+      if (photos.length > 0) {
+        try {
+          await startUpload("maintenanceImage", photos, { requestId, commentId: created.id });
+          setPhotos([]);
+        } catch (error) {
+          toast.error(
+            `Commentaire envoyé, mais les photos n'ont pas pu être jointes : ${uploadErrorMessage(error)}`
+          );
+        }
+      }
 
       // Recharger le fil pour inclure les éventuels messages des autres participants
       const listResponse = await fetch(`/api/maintenance/${requestId}/comments`);
       if (listResponse.ok) {
         setComments(await listResponse.json());
       } else {
-        const created: MaintenanceComment = await response.json();
         setComments((prev) => [...prev, created]);
       }
     } catch (error) {
@@ -175,6 +191,14 @@ export function CommentThread({
                     >
                       {comment.content}
                     </p>
+                    {comment.images && comment.images.length > 0 && (
+                      <ImageGallery
+                        images={comment.images}
+                        alt={`Photo jointe par ${isMine ? "vous" : name}`}
+                        variant="thumbs"
+                        className={cn(isMine && "justify-end")}
+                      />
+                    )}
                   </div>
                 </li>
               );
@@ -193,6 +217,13 @@ export function CommentThread({
             onChange={(e) => setContent(e.target.value)}
             maxLength={5000}
             className="min-h-[90px]"
+          />
+          <PendingImagesPicker
+            endpoint="maintenanceImage"
+            files={photos}
+            onChange={setPhotos}
+            disabled={isSending}
+            hideWhenDisabled
           />
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs text-muted-foreground tabular-nums">

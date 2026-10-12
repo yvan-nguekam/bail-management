@@ -161,6 +161,8 @@ model Property {
   securityDeposit Float? // Indicative deposit
   availableFrom   DateTime?
   images          String[] // Array of image URLs
+  // Clés Uploadthing des images téléversées (suppression distante ; les URL ajoutées à la main n'en ont pas)
+  imageKeys       String[]  @default([])
   amenities       String[] // Array of amenities
 
   ownerId String
@@ -367,12 +369,14 @@ model Notification {
 }
 
 model Document {
-  id       String @id @default(cuid())
+  id       String  @id @default(cuid())
   name     String
   type     String // Contract, Invoice, Receipt, etc.
   url      String
   size     Int // File size in bytes
   mimeType String
+  // Clé Uploadthing si le fichier a été téléversé (null pour un document ajouté par lien)
+  fileKey  String?
 
   propertyId String?
   property   Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)

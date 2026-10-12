@@ -266,7 +266,12 @@ export default function PropertiesPage() {
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {filteredProperties.map((property, i) => (
-              <PropertyCard key={property.id} property={property} index={Math.min(i, 8)} />
+              <PropertyCard
+                key={property.id}
+                property={property}
+                index={Math.min(i, 8)}
+                coverSlot={filteredProperties.some((p) => p.images?.length)}
+              />
             ))}
           </div>
 
