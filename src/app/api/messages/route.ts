@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { notify } from "@/lib/notify";
+import { absoluteUrl, buildEmailSubject } from "@/lib/notification-preferences";
+import { NewMessageEmail } from "@/emails/new-message";
 import { canMessageUser } from "@/lib/message-contacts";
 
 const messageSchema = z.object({
@@ -90,14 +93,23 @@ export async function POST(request: NextRequest) {
     });
 
     // Créer une notification pour le destinataire
-    await prisma.notification.create({
-      data: {
-        userId: validatedData.receiverId,
-        type: "MESSAGE",
-        title: "Nouveau message",
-        message: `${session.user.name} : ${validatedData.subject}`,
-        relatedId: message.id,
-        link: `/messages/${message.id}`,
+    await notify({
+      userId: validatedData.receiverId,
+      type: "MESSAGE",
+      title: "Nouveau message",
+      message: `${session.user.name} : ${validatedData.subject}`,
+      relatedId: message.id,
+      link: `/messages/${message.id}`,
+      email: {
+        subject: buildEmailSubject(`Nouveau message de ${message.sender.name}`, validatedData.subject),
+        react: (recipient) =>
+          NewMessageEmail({
+            recipientName: recipient.name,
+            senderName: message.sender.name,
+            subject: validatedData.subject,
+            content: validatedData.content,
+            messageUrl: absoluteUrl(`/messages/${message.id}`),
+          }),
       },
     });
 

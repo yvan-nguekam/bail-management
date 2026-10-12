@@ -107,8 +107,20 @@ model User {
   role          UserRole  @default(TENANT)
   avatar        String?
   emailVerified DateTime?
+
+  // Préférences e-mail : interrupteur général + désinscription par catégorie.
+  // Les notifications in-app sont toujours créées, seuls les e-mails en dépendent.
+  emailNotifications Boolean @default(true)
+  emailPayments      Boolean @default(true)
+  emailLeases        Boolean @default(true)
+  emailMaintenance   Boolean @default(true)
+  emailMessages      Boolean @default(true)
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  // Posé à chaque changement / réinitialisation du mot de passe : les JWT émis avant sont refusés
+  passwordChangedAt DateTime?
 
   // Relations
   ownedProperties             Property[]           @relation("PropertyOwner")
@@ -124,6 +136,8 @@ model User {
   documents                   Document[]
   activities                  Activity[]
   depositDeductions           DepositDeduction[]
+  passwordResetTokens         PasswordResetToken[]
+  sentInvitations             Invitation[]         @relation("InvitationSender")
 
   @@map("users")
 }
@@ -394,4 +408,36 @@ model Activity {
   createdAt DateTime @default(now())
 
   @@map("activities")
+}
+
+// Réinitialisation du mot de passe : seul le hash SHA-256 du jeton est stocké (le jeton brut est dans le lien)
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// Invitation d'un locataire sans compte : le compte n'est créé qu'à l'acceptation
+model Invitation {
+  id          String    @id @default(cuid())
+  email       String
+  name        String
+  phone       String?
+  tokenHash   String    @unique
+  invitedById String
+  invitedBy   User      @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([email])
+  @@index([invitedById])
+  @@map("invitations")
 }

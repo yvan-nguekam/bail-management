@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { notify } from "@/lib/notify";
+import { absoluteUrl, buildEmailSubject } from "@/lib/notification-preferences";
+import { MaintenanceUpdateEmail } from "@/emails/maintenance-update";
 import { Prisma } from "@prisma/client";
 import {
   MAINTENANCE_STATUSES,
@@ -274,18 +277,26 @@ export async function POST(request: NextRequest) {
       )
     );
 
-    if (recipients.size > 0) {
-      await prisma.notification.createMany({
-        data: [...recipients].map((userId) => ({
-          userId,
-          type: "MAINTENANCE_REQUEST" as const,
-          title: "Nouvelle demande de maintenance",
-          message: `${session.user.name} a créé une demande: ${maintenanceRequest.title}`,
-          relatedId: maintenanceRequest.id,
-          link: `/maintenance/${maintenanceRequest.id}`,
-        })),
-      });
-    }
+    await notify({
+      userIds: [...recipients],
+      type: "MAINTENANCE_REQUEST",
+      title: "Nouvelle demande de maintenance",
+      message: `${session.user.name} a créé une demande: ${maintenanceRequest.title}`,
+      relatedId: maintenanceRequest.id,
+      link: `/maintenance/${maintenanceRequest.id}`,
+      email: {
+        subject: buildEmailSubject("Nouvelle demande de maintenance", maintenanceRequest.title),
+        react: (recipient) =>
+          MaintenanceUpdateEmail({
+            kind: "created",
+            recipientName: recipient.name,
+            requestTitle: maintenanceRequest.title,
+            propertyName: maintenanceRequest.property.name,
+            actorName: session.user.name,
+            requestUrl: absoluteUrl(`/maintenance/${maintenanceRequest.id}`),
+          }),
+      },
+    });
 
     return NextResponse.json(maintenanceRequest, { status: 201 });
   } catch (error) {

@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { notify } from "@/lib/notify";
+import { absoluteUrl, buildEmailSubject } from "@/lib/notification-preferences";
+import { MaintenanceUpdateEmail } from "@/emails/maintenance-update";
 
 const commentSchema = z.object({
   content: z
@@ -138,18 +141,27 @@ export async function POST(
       ].filter((uid): uid is string => !!uid && uid !== session.user.id)
     );
 
-    if (recipients.size > 0) {
-      await prisma.notification.createMany({
-        data: [...recipients].map((userId) => ({
-          userId,
-          type: "MAINTENANCE_UPDATE" as const,
-          title: "Nouveau commentaire",
-          message: `${session.user.name} a commenté la demande: ${maintenanceRequest.title}`,
-          relatedId: maintenanceRequest.id,
-          link: `/maintenance/${maintenanceRequest.id}`,
-        })),
-      });
-    }
+    await notify({
+      userIds: [...recipients],
+      type: "MAINTENANCE_UPDATE",
+      title: "Nouveau commentaire",
+      message: `${session.user.name} a commenté la demande: ${maintenanceRequest.title}`,
+      relatedId: maintenanceRequest.id,
+      link: `/maintenance/${maintenanceRequest.id}`,
+      email: {
+        subject: buildEmailSubject("Nouveau commentaire", maintenanceRequest.title),
+        react: (recipient) =>
+          MaintenanceUpdateEmail({
+            kind: "comment",
+            recipientName: recipient.name,
+            requestTitle: maintenanceRequest.title,
+            propertyName: maintenanceRequest.property.name,
+            actorName: session.user.name,
+            comment: content,
+            requestUrl: absoluteUrl(`/maintenance/${maintenanceRequest.id}`),
+          }),
+      },
+    });
 
     return NextResponse.json(comment, { status: 201 });
   } catch (error) {

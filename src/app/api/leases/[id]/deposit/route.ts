@@ -11,6 +11,9 @@ import {
   loadDepositLease,
 } from "@/lib/deposit-access";
 import { formatCurrency } from "@/lib/utils";
+import { notify } from "@/lib/notify";
+import { absoluteUrl, buildEmailSubject } from "@/lib/notification-preferences";
+import { DepositUpdateEmail } from "@/emails/deposit-update";
 
 const paymentMethodSchema = z.enum([
   "CASH",
@@ -131,14 +134,24 @@ export async function POST(
         );
       }
 
-      await prisma.notification.create({
-        data: {
-          userId: lease.tenantId,
-          type: "DEPOSIT_RECEIVED",
-          title: "Caution reçue",
-          message: `Votre caution de ${formatCurrency(amount)} pour ${lease.property.name} a été reçue le ${formatDate(receivedAt)}`,
-          relatedId: lease.id,
-          link: `/leases/${lease.id}`,
+      await notify({
+        userId: lease.tenantId,
+        type: "DEPOSIT_RECEIVED",
+        title: "Caution reçue",
+        message: `Votre caution de ${formatCurrency(amount)} pour ${lease.property.name} a été reçue le ${formatDate(receivedAt)}`,
+        relatedId: lease.id,
+        link: `/leases/${lease.id}`,
+        email: {
+          subject: buildEmailSubject("Caution reçue", lease.property.name),
+          react: (recipient) =>
+            DepositUpdateEmail({
+              kind: "received",
+              recipientName: recipient.name,
+              propertyName: lease.property.name,
+              amount,
+              receivedAt,
+              leaseUrl: absoluteUrl(`/leases/${lease.id}`),
+            }),
         },
       });
 
@@ -201,14 +214,26 @@ export async function POST(
           ? ` Les retenues dépassent la caution : ${formatCurrency(balance.remainingDue)} restent dus.`
           : "";
 
-      await prisma.notification.create({
-        data: {
-          userId: lease.tenantId,
-          type: "DEPOSIT_SETTLED",
-          title: "Caution restituée",
-          message: `Votre caution pour ${lease.property.name} a été soldée le ${formatDate(settledAt)} : ${formatCurrency(balance.refundAmount)} restitués, ${formatCurrency(balance.totalDeductions)} retenus.${dueText}`,
-          relatedId: lease.id,
-          link: `/leases/${lease.id}`,
+      await notify({
+        userId: lease.tenantId,
+        type: "DEPOSIT_SETTLED",
+        title: "Caution restituée",
+        message: `Votre caution pour ${lease.property.name} a été soldée le ${formatDate(settledAt)} : ${formatCurrency(balance.refundAmount)} restitués, ${formatCurrency(balance.totalDeductions)} retenus.${dueText}`,
+        relatedId: lease.id,
+        link: `/leases/${lease.id}`,
+        email: {
+          subject: buildEmailSubject("Caution restituée", lease.property.name),
+          react: (recipient) =>
+            DepositUpdateEmail({
+              kind: "settled",
+              recipientName: recipient.name,
+              propertyName: lease.property.name,
+              settledAt,
+              refundAmount: balance.refundAmount,
+              totalDeductions: balance.totalDeductions,
+              remainingDue: balance.remainingDue,
+              leaseUrl: absoluteUrl(`/leases/${lease.id}`),
+            }),
         },
       });
 

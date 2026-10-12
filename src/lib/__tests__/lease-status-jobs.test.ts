@@ -8,10 +8,44 @@ import {
   runLeaseStatusJobs,
   sendExpiryNotices,
 } from "@/lib/lease-status-jobs"
+import { sendEmail } from "@/lib/email"
+
+jest.mock("@/lib/prisma", () => ({ prisma: {} }))
+jest.mock("@/lib/email", () => ({
+  sendEmail: jest.fn(async () => ({ success: false, skipped: true })),
+}))
+
+const sendEmailMock = sendEmail as jest.MockedFunction<typeof sendEmail>
 
 const d = (iso: string) => new Date(`${iso}T00:00:00.000Z`)
 
 const property = { id: "prop-1", name: "Villa Bonapriso", ownerId: "owner-1", managerId: "manager-1" }
+
+const prefs = {
+  emailNotifications: true,
+  emailPayments: true,
+  emailLeases: true,
+  emailMaintenance: true,
+  emailMessages: true,
+}
+
+// Users looked up for emails: every id gets an address; the owner opted out of lease emails
+const findUsers = jest.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
+  where.id.in.map((id) => ({
+    id,
+    name: `Name ${id}`,
+    email: `${id}@test.com`,
+    ...prefs,
+    ...(id === "owner-1" ? { emailLeases: false } : {}),
+  }))
+)
+
+const emailRecipients = () => sendEmailMock.mock.calls.map(([params]) => params.to)
+
+beforeEach(() => {
+  sendEmailMock.mockClear()
+  findUsers.mockClear()
+})
 
 // Each model method is a jest mock; $transaction just awaits the queued operations
 function fakeDb(overrides: Record<string, Record<string, jest.Mock>> = {}) {
@@ -29,6 +63,7 @@ function fakeDb(overrides: Record<string, Record<string, jest.Mock>> = {}) {
     property: { ...model(), ...overrides.property },
     notification: { ...model(), ...overrides.notification },
     activity: { ...model(), ...overrides.activity },
+    user: { ...model(), findMany: findUsers, ...overrides.user },
     $transaction: jest.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
   }
   return db as unknown as PrismaClient & typeof db
@@ -65,6 +100,32 @@ describe("markOverduePayments", () => {
       { data: { userId: string; link: string }[] },
     ]
     expect(data).toEqual([expect.objectContaining({ userId: "tenant-1", link: "/payments/pay-1" })])
+    // Email sent to the tenant once the transaction has run
+    expect(emailRecipients()).toEqual(["tenant-1@test.com"])
+    expect(sendEmailMock.mock.calls[0][0].subject).toBe("Loyer en retard · Villa Bonapriso")
+  })
+
+  it("still updates statuses and in-app notifications when the email lookup fails", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => {})
+    const db = fakeDb({
+      payment: {
+        findMany: jest.fn(async () => [
+          {
+            id: "pay-1",
+            tenantId: "tenant-1",
+            amount: 150000,
+            dueDate: d("2026-03-05"),
+            lease: { property: { name: property.name } },
+          },
+        ]),
+        updateMany: jest.fn(async () => ({ count: 1 })),
+      },
+      user: { findMany: jest.fn(async () => Promise.reject(new Error("db down"))) },
+    })
+
+    expect(await markOverduePayments(db, d("2026-03-06"))).toEqual({ overdue: 1 })
+    expect(db.notification.createMany).toHaveBeenCalledTimes(1)
+    expect(sendEmailMock).not.toHaveBeenCalled()
   })
 
   it("does nothing when no payment is late", async () => {
@@ -94,6 +155,8 @@ describe("expireEndedLeases", () => {
     })
     const [{ data }] = db.notification.createMany.mock.calls[0] as unknown as [{ data: { userId: string }[] }]
     expect(data.map((n) => n.userId)).toEqual(["tenant-1", "owner-1", "manager-1"])
+    // In-app for everyone, email only for those accepting lease emails (owner opted out)
+    expect(emailRecipients()).toEqual(["tenant-1@test.com", "manager-1@test.com"])
   })
 
   it("keeps the property occupied when another lease is active on it", async () => {
@@ -128,6 +191,8 @@ describe("sendExpiryNotices", () => {
     expect(db.lease.update).toHaveBeenCalledWith({ where: { id: "a" }, data: { lastExpiryNoticeDays: 30 } })
     expect(db.lease.update).toHaveBeenCalledWith({ where: { id: "c" }, data: { lastExpiryNoticeDays: null } })
     expect(db.notification.createMany).toHaveBeenCalledTimes(1)
+    expect(emailRecipients()).toEqual(["t-a@test.com", "manager-1@test.com"])
+    expect(sendEmailMock.mock.calls[0][0].subject).toBe("Fin de bail dans 30 jours · Villa Bonapriso")
   })
 })
 

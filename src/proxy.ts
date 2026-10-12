@@ -7,8 +7,16 @@ import { routing, defaultLocale, type Locale } from "./i18n/routing"
 const intlMiddleware = createMiddleware(routing)
 
 // Public routes that don't require authentication
-const publicRoutes = ["/", "/auth/login", "/auth/register"]
-const authRoutes = ["/auth/login", "/auth/register"]
+const publicRoutes = [
+  "/",
+  "/auth/login",
+  "/auth/register",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+  "/auth/accept-invite",
+]
+// Pages réservées aux visiteurs non connectés (les liens reçus par e-mail restent accessibles)
+const authRoutes = ["/auth/login", "/auth/register", "/auth/forgot-password"]
 
 // Build a URL path for a locale, without prefix for the default locale ("as-needed")
 function localizedPath(locale: Locale, path: string) {

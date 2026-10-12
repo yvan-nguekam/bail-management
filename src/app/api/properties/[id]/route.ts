@@ -109,6 +109,21 @@ export async function GET(
       );
     }
 
+    // Un locataire ne voit que ses propres baux et demandes (pas les coordonnées des autres)
+    if (
+      session.user.role === "TENANT" &&
+      property.ownerId !== session.user.id &&
+      property.managerId !== session.user.id
+    ) {
+      return NextResponse.json({
+        ...property,
+        leases: property.leases.filter((lease) => lease.tenantId === session.user.id),
+        maintenanceRequests: property.maintenanceRequests.filter(
+          (request) => request.tenantId === session.user.id
+        ),
+      });
+    }
+
     return NextResponse.json(property);
   } catch (error) {
     console.error("Erreur lors de la récupération de la propriété:", error);
@@ -162,6 +177,19 @@ export async function PUT(
 
     const body = await request.json();
     const validatedData = updatePropertySchema.parse(body);
+
+    // Seuls l'admin et le propriétaire désignent le gestionnaire, qui doit être un compte MANAGER
+    if (validatedData.managerId !== undefined && validatedData.managerId !== existingProperty.managerId) {
+      if (session.user.role !== "ADMIN" && existingProperty.ownerId !== session.user.id) {
+        return NextResponse.json(
+          { error: "Seul le propriétaire peut changer le gestionnaire" },
+          { status: 403 }
+        );
+      }
+      if (validatedData.managerId && !(await isManagerAccount(validatedData.managerId))) {
+        return NextResponse.json({ error: "Gestionnaire invalide" }, { status: 400 });
+      }
+    }
 
     // Convertir la date si présente
     const updateData: any = { ...validatedData };
@@ -299,4 +327,9 @@ export async function DELETE(
       { status: 500 }
     );
   }
+}
+
+async function isManagerAccount(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+  return user?.role === "MANAGER";
 }

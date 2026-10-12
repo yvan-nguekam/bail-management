@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { notify } from "@/lib/notify";
+import { absoluteUrl, buildEmailSubject } from "@/lib/notification-preferences";
+import { LeaseUpdateEmail } from "@/emails/lease-update";
 import { syncLeaseSchedule } from "@/lib/lease-schedule";
 
 const terminateSchema = z.object({
@@ -121,13 +124,24 @@ export async function POST(
     });
 
     // Créer une notification pour le locataire
-    await prisma.notification.create({
-      data: {
-        userId: lease.tenantId,
-        type: "LEASE_TERMINATED",
-        title: "Résiliation de bail",
-        message: `Votre bail pour ${lease.property.name} a été résilié`,
-        relatedId: lease.id,
+    await notify({
+      userId: lease.tenantId,
+      type: "LEASE_TERMINATED",
+      title: "Résiliation de bail",
+      message: `Votre bail pour ${lease.property.name} a été résilié`,
+      relatedId: lease.id,
+      link: `/leases/${lease.id}`,
+      email: {
+        subject: buildEmailSubject("Bail résilié", lease.property.name),
+        react: (recipient) =>
+          LeaseUpdateEmail({
+            kind: "terminated",
+            recipientName: recipient.name,
+            propertyName: lease.property.name,
+            endDate: termDate,
+            reason,
+            leaseUrl: absoluteUrl(`/leases/${lease.id}`),
+          }),
       },
     });
 

@@ -47,9 +47,10 @@ export async function GET(request: NextRequest) {
       where,
       include: {
         lease: {
+          // Jamais l'enregistrement User complet (hash du mot de passe, etc.)
           include: {
-            property: true,
-            tenant: true
+            property: { select: { id: true, name: true, address: true, city: true } },
+            tenant: { select: { id: true, name: true, email: true, phone: true } }
           }
         }
       },
