@@ -97,3 +97,21 @@ export function canDeleteDocument(user: AccessUser, document: DocumentAccessInfo
   if (!property) return false
   return property.ownerId === user.id || property.managerId === user.id
 }
+
+/**
+ * Lien de document accepté : https uniquement (http toléré en développement).
+ * Écarte javascript:, data:, file:… qui seraient ouverts tels quels depuis la bibliothèque.
+ */
+export function isAllowedDocumentUrl(
+  url: string,
+  allowHttp: boolean = process.env.NODE_ENV === "development"
+): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(url.trim())
+  } catch {
+    return false
+  }
+  if (!parsed.hostname) return false
+  return parsed.protocol === "https:" || (allowHttp && parsed.protocol === "http:")
+}

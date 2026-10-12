@@ -16,7 +16,7 @@ Application complète de gestion de baux immobiliers avec Next.js 15, TypeScript
 
 ### ✅ Documents & Fichiers
 - Gestion de documents par propriété/bail
-- Upload de fichiers (Uploadthing ready)
+- Upload de fichiers (Uploadthing) : documents, photos des biens et des interventions, photo de profil
 - Génération PDF des reçus
 
 ### ✅ Sécurité & Rôles
@@ -200,7 +200,7 @@ Obligatoires :
 Optionnelles :
 - `CRON_SECRET` (tâches planifiées, voir ci-dessous)
 - `RESEND_API_KEY` (emails)
-- `UPLOADTHING_*` (upload fichiers)
+- `UPLOADTHING_TOKEN` (upload de fichiers, voir « Upload de fichiers »)
 - `STRIPE_*` (paiements)
 
 ## 🗄️ Base de données
@@ -331,6 +331,44 @@ production.
    Les migrations en attente sont ainsi appliquées avant chaque build ; si une migration échoue,
    le déploiement est annulé et l'ancienne version reste en ligne. Le client Prisma est généré
    automatiquement à l'installation (`postinstall`).
+
+## 📎 Upload de fichiers
+
+L'envoi de fichiers passe par [Uploadthing](https://uploadthing.com) (route `/api/uploadthing`,
+définie dans `src/app/api/uploadthing/core.ts`).
+
+**Configuration**
+1. Créez un compte puis une application sur [uploadthing.com](https://uploadthing.com/dashboard).
+2. Dans *API Keys*, copiez le jeton **V7** (`UPLOADTHING_TOKEN`, une chaîne base64).
+3. Ajoutez-le à `.env` (et aux variables d'environnement Vercel) :
+   ```bash
+   UPLOADTHING_TOKEN="eyJhcGlLZXkiOi..."
+   ```
+4. **Rebuild / redémarrez** : `NEXT_PUBLIC_UPLOAD_ENABLED` est calculé dans `next.config.ts` à
+   partir de la présence du jeton **au moment du build** (forçable avec
+   `NEXT_PUBLIC_UPLOAD_ENABLED="true"` ou `"false"`).
+
+En production, Uploadthing rappelle `https://<votre-domaine>/api/uploadthing` à la fin de chaque
+envoi (enregistrement en base) : l'URL doit être publique. En local (`pnpm dev`), ce rappel est
+simulé par la bibliothèque.
+
+**Routes et limites**
+
+| Route | Fichiers | Taille max | Nombre | Accès | Effet |
+|---|---|---|---|---|---|
+| `propertyImage` | images | 4 Mo | 10 par envoi, 20 par bien | admin, propriétaire, gestionnaire du bien | ajoutée à `Property.images` |
+| `document` | PDF, images, Word, Excel, OpenDocument, texte | 16 Mo | 1 | mêmes règles que `POST /api/documents` | ligne `Document` + journal d'activité |
+| `maintenanceImage` | images | 4 Mo | 5 par envoi, 20 par demande | participants de la demande (auteur seul pour un commentaire) | jointe à la demande ou au commentaire |
+| `avatar` | image | 2 Mo | 1 | utilisateur connecté | `User.avatar` (l'ancienne photo est supprimée) |
+
+Les clés Uploadthing sont conservées (`Document.fileKey`, `Property.imageKeys`) : supprimer un
+document ou retirer une photo supprime aussi le fichier distant (au mieux : un échec côté
+Uploadthing n'empêche jamais la suppression en base). Une URL saisie à la main n'est jamais
+supprimée à distance.
+
+**Sans jeton**, l'application fonctionne normalement : les zones d'envoi affichent
+« Upload non configuré », `/api/uploadthing` répond `503`, et l'ajout de documents **par lien**
+reste disponible (liens `https://` uniquement, `http://` toléré en développement).
 
 ## ⏰ Tâches planifiées
 

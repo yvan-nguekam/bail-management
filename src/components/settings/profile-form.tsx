@@ -20,6 +20,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { userRoleLabel } from "@/lib/users"
+import { AvatarCard } from "./avatar-card"
 import { CalendarDays, Loader2, Save, ShieldCheck, User } from "lucide-react"
 import { toast } from "sonner"
 
@@ -137,45 +138,53 @@ export function ProfileForm({ profile, onSaved }: { profile: Profile; onSaved: (
         </CardContent>
       </Card>
 
-      <Card className="animate-fade-up" style={{ "--stagger": 2 } as React.CSSProperties}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-muted-foreground" aria-hidden />
-            Compte
-          </CardTitle>
-          <CardDescription>Informations gérées par l&apos;administration.</CardDescription>
-        </CardHeader>
-        <CardContent className="divide-y">
-          <div className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+      <div className="space-y-6">
+        <AvatarCard
+          name={profile.name}
+          avatar={profile.avatar}
+          onChange={(avatar) => onSaved({ ...profile, avatar })}
+          style={{ "--stagger": 2 } as React.CSSProperties}
+        />
+        <Card className="animate-fade-up" style={{ "--stagger": 3 } as React.CSSProperties}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-muted-foreground" aria-hidden />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rôle</p>
-              <div className="mt-1">
-                <Badge variant="info">{userRoleLabel(profile.role)}</Badge>
+              Compte
+            </CardTitle>
+            <CardDescription>Informations gérées par l&apos;administration.</CardDescription>
+          </CardHeader>
+          <CardContent className="divide-y">
+            <div className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                <ShieldCheck className="h-4 w-4 text-muted-foreground" aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rôle</p>
+                <div className="mt-1">
+                  <Badge variant="info">{userRoleLabel(profile.role)}</Badge>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
-              <CalendarDays className="h-4 w-4 text-muted-foreground" aria-hidden />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Membre depuis
-              </p>
-              <p className="mt-0.5 text-sm font-medium tabular-nums">
-                {new Date(profile.createdAt).toLocaleDateString("fr-FR", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}
-              </p>
+            <div className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                <CalendarDays className="h-4 w-4 text-muted-foreground" aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Membre depuis
+                </p>
+                <p className="mt-0.5 text-sm font-medium tabular-nums">
+                  {new Date(profile.createdAt).toLocaleDateString("fr-FR", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </p>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

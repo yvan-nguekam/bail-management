@@ -57,6 +57,14 @@ export const authOptions: NextAuthOptions = {
       if (trigger === "update" && session && typeof session.name === "string") {
         token.name = session.name
       }
+      // useSession().update({ avatar: true }) après envoi / retrait de la photo : relue en base
+      if (trigger === "update" && session?.avatar === true && typeof token.id === "string") {
+        const fresh = await prisma.user.findUnique({
+          where: { id: token.id },
+          select: { avatar: true },
+        })
+        token.avatar = fresh?.avatar ?? null
+      }
       return token
     },
     async session({ session, token }) {

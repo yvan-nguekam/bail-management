@@ -4,14 +4,18 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
-import { DOCUMENT_TYPES, guessMimeType } from "@/lib/documents";
+import { DOCUMENT_TYPES, guessMimeType, isAllowedDocumentUrl } from "@/lib/documents";
+import { checkDocumentTargetAccess } from "@/lib/document-access";
 
 // Taille et type MIME sont optionnels pour un document ajouté par lien
-// (l'envoi de fichiers viendra avec une fonctionnalité ultérieure).
+// (les fichiers téléversés passent par /api/uploadthing, route "document").
 const documentSchema = z.object({
   name: z.string().trim().min(1, "Le nom est requis").max(150, "150 caractères maximum"),
   type: z.enum(DOCUMENT_TYPES),
-  url: z.string().trim().url("URL invalide"),
+  url: z
+    .string()
+    .trim()
+    .refine((url) => isAllowedDocumentUrl(url), "Lien invalide : utilisez une adresse https://"),
   size: z.number().int().nonnegative().default(0),
   mimeType: z.string().min(1).optional(),
   propertyId: z.string().optional(),
@@ -95,33 +99,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = documentSchema.parse(body);
 
-    // Vérifier l'accès au bien / bail rattaché
-    const isAdmin = session.user.role === "ADMIN";
-    if (validatedData.propertyId && !isAdmin) {
-      const property = await prisma.property.findUnique({
-        where: { id: validatedData.propertyId },
-        select: { ownerId: true, managerId: true },
-      });
-      if (
-        !property ||
-        (property.ownerId !== session.user.id && property.managerId !== session.user.id)
-      ) {
-        return NextResponse.json({ error: "Non autorisé pour cette propriété" }, { status: 403 });
-      }
-    }
-    if (validatedData.leaseId && !isAdmin) {
-      const lease = await prisma.lease.findUnique({
-        where: { id: validatedData.leaseId },
-        select: { tenantId: true, property: { select: { ownerId: true, managerId: true } } },
-      });
-      if (
-        !lease ||
-        (lease.tenantId !== session.user.id &&
-          lease.property.ownerId !== session.user.id &&
-          lease.property.managerId !== session.user.id)
-      ) {
-        return NextResponse.json({ error: "Non autorisé pour ce bail" }, { status: 403 });
-      }
+    // Vérifier l'accès au bien / bail rattaché (règles partagées avec l'envoi de fichiers)
+    const access = await checkDocumentTargetAccess(prisma, session.user, validatedData);
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
     }
 
     const document = await prisma.document.create({

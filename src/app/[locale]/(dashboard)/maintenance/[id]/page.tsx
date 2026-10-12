@@ -28,6 +28,7 @@ import {
   MaintenanceStatusBadge,
 } from "@/components/maintenance/maintenance-badges";
 import { CommentThread } from "@/components/maintenance/comment-thread";
+import { ImageGallery } from "@/components/uploads/image-gallery";
 import { ManageRequestCard } from "@/components/maintenance/manage-request-card";
 import type { MaintenanceDetail, UserSummary } from "@/components/maintenance/types";
 import { canDeleteRequest, canManageProperty } from "@/lib/maintenance";
@@ -206,10 +207,17 @@ export default function MaintenanceDetailPage() {
                 Description
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <p className="whitespace-pre-wrap text-sm leading-relaxed">
                 {request.description}
               </p>
+              {request.images && request.images.length > 0 && (
+                <ImageGallery
+                  images={request.images}
+                  alt={`Photo de la demande « ${request.title} »`}
+                  variant="thumbs"
+                />
+              )}
             </CardContent>
           </Card>
 

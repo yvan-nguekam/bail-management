@@ -33,6 +33,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { PageSkeleton } from "@/components/shared/page-skeleton";
 import { statusLabel } from "@/components/shared/status-badge";
 import { FormActions } from "@/components/properties/form-actions";
+import { PropertyImageManager } from "@/components/properties/property-image-manager";
 import {
   propertyStatuses,
   propertyTypeLabels,
@@ -64,6 +65,7 @@ export default function EditPropertyPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [propertyName, setPropertyName] = useState("");
+  const [images, setImages] = useState<string[]>([]);
 
   const form = useForm<z.input<typeof propertySchema>, unknown, PropertyFormData>({
     resolver: zodResolver(propertySchema),
@@ -84,6 +86,7 @@ export default function EditPropertyPage() {
 
       const property = await response.json();
       setPropertyName(property.name);
+      setImages(property.images ?? []);
 
       // Formater la date pour l'input date
       const availableFromDate = new Date(property.availableFrom)
@@ -435,6 +438,15 @@ export default function EditPropertyPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Photos : enregistrées immédiatement, indépendamment du bouton ci-dessous */}
+          <PropertyImageManager
+            propertyId={params.id}
+            propertyName={propertyName}
+            initialImages={images}
+            className="animate-fade-up scroll-mt-20"
+            style={{ "--stagger": 5 } as React.CSSProperties}
+          />
 
           <FormActions
             submitLabel="Enregistrer les modifications"
