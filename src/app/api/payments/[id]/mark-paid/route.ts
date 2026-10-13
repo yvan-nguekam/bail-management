@@ -7,6 +7,8 @@ import { notify } from "@/lib/notify";
 import { formatCurrency } from "@/lib/utils";
 import { absoluteUrl, buildEmailSubject } from "@/lib/notification-preferences";
 import { PaymentReceivedEmail } from "@/emails/payment-received";
+import { checkMarkPaid } from "@/lib/status-rules";
+import { Prisma } from "@prisma/client";
 
 const markPaidSchema = z.object({
   paymentMethod: z.enum(["CASH", "BANK_TRANSFER", "CREDIT_CARD", "CHECK", "MOBILE_MONEY"]),
@@ -68,12 +70,10 @@ export async function POST(
       );
     }
 
-    // Vérifier que le paiement n'est pas déjà payé
-    if (payment.status === "PAID") {
-      return NextResponse.json(
-        { error: "Ce paiement a déjà été marqué comme payé" },
-        { status: 400 }
-      );
+    // Ni déjà payé, ni annulé (un paiement annulé doit d'abord être rouvert)
+    const rule = checkMarkPaid(payment.status);
+    if (!rule.ok) {
+      return NextResponse.json({ error: rule.error }, { status: 400 });
     }
 
     const body = await request.json();
@@ -82,8 +82,9 @@ export async function POST(
     const paidDateTime = paidDate ? new Date(paidDate) : new Date();
 
     // Mettre à jour le paiement
+    // Statut revérifié à l'écriture : deux encaissements simultanés ne passent pas
     const updatedPayment = await prisma.payment.update({
-      where: { id },
+      where: { id, status: { in: ["PENDING", "OVERDUE"] } },
       data: {
         status: "PAID",
         paidDate: paidDateTime,
@@ -152,6 +153,14 @@ export async function POST(
       return NextResponse.json(
         { error: "Données invalides", details: error.issues },
         { status: 400 }
+      );
+    }
+
+    // Le statut a changé entre la lecture et l'écriture (encaissé ou annulé entre-temps)
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      return NextResponse.json(
+        { error: "Ce paiement a changé entre-temps. Rechargez la page." },
+        { status: 409 }
       );
     }
 

@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { syncLeaseSchedule } from "@/lib/lease-schedule";
+import { toUtcDay } from "@/lib/payment-schedule";
+import { checkLeaseStatusChange, checkLeaseTermsChange } from "@/lib/status-rules";
 
 // Schema de validation pour mise à jour
 const updateLeaseSchema = z.object({
@@ -180,10 +182,34 @@ export async function PUT(
       (validatedData.monthlyRent !== undefined && validatedData.monthlyRent !== existingLease.monthlyRent) ||
       (validatedData.paymentDay !== undefined && validatedData.paymentDay !== existingLease.paymentDay);
     const finalStatus = validatedData.status ?? existingLease.status;
+
+    // Terminer ou renouveler passe par les actions dédiées ; un bail terminé est figé
+    const statusCheck = checkLeaseStatusChange(existingLease.status, finalStatus, {
+      endDate,
+      today: toUtcDay(new Date()),
+    });
+    if (!statusCheck.ok) {
+      return NextResponse.json({ error: statusCheck.error }, { status: 400 });
+    }
+    const termsCheck = checkLeaseTermsChange(existingLease.status, scheduleTermsChanged);
+    if (!termsCheck.ok) {
+      return NextResponse.json({ error: termsCheck.error }, { status: 400 });
+    }
+
+    const activating = existingLease.status !== "ACTIVE" && finalStatus === "ACTIVE";
     const shouldSyncSchedule =
       scheduleTermsChanged && ["DRAFT", "ACTIVE"].includes(finalStatus);
 
-    const { lease, schedule } = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
+      // Un seul bail actif par bien (vérifié dans la transaction)
+      if (activating) {
+        const otherActive = await tx.lease.findFirst({
+          where: { propertyId: existingLease.propertyId, status: "ACTIVE", id: { not: id } },
+          select: { id: true },
+        });
+        if (otherActive) return null;
+      }
+
       const lease = await tx.lease.update({
         where: { id },
         data: updateData,
@@ -208,8 +234,23 @@ export async function PUT(
 
       const schedule = shouldSyncSchedule ? await syncLeaseSchedule(tx, lease) : null;
 
+      if (activating) {
+        await tx.property.update({
+          where: { id: lease.propertyId },
+          data: { status: "OCCUPIED" },
+        });
+      }
+
       return { lease, schedule };
     });
+
+    if (!result) {
+      return NextResponse.json(
+        { error: "Ce bien a déjà un bail actif. Résiliez-le ou attendez son expiration." },
+        { status: 409 }
+      );
+    }
+    const { lease, schedule } = result;
 
     // Si le statut change vers TERMINATED ou EXPIRED, mettre à jour la propriété
     if (

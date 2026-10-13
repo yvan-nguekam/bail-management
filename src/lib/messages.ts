@@ -53,6 +53,48 @@ export function isMessageParticipant(userId: string, message: MessageParticipant
   return message.senderId === userId || message.receiverId === userId
 }
 
+export interface MessageDeletionState extends MessageParticipants {
+  deletedBySenderAt: Date | null
+  deletedByReceiverAt: Date | null
+}
+
+/** Vrai si l'utilisateur a supprimé ce message de sa propre boîte. */
+export function isDeletedFor(userId: string, message: MessageDeletionState): boolean {
+  if (message.senderId === userId && message.deletedBySenderAt) return true
+  if (message.receiverId === userId && message.deletedByReceiverAt) return true
+  return false
+}
+
+/**
+ * Effet d'une suppression par `userId` : masquer pour lui seul, ou supprimer
+ * définitivement quand l'autre participant l'a déjà supprimé (ou s'écrit à soi-même).
+ */
+export function deletionFor(
+  userId: string,
+  message: MessageDeletionState,
+  now: Date
+): { action: "hard-delete" } | { action: "hide"; data: { deletedBySenderAt?: Date; deletedByReceiverAt?: Date } } {
+  const isSender = message.senderId === userId
+  const isReceiver = message.receiverId === userId
+  const senderGone = isSender || message.deletedBySenderAt !== null
+  const receiverGone = isReceiver || message.deletedByReceiverAt !== null
+  if (senderGone && receiverGone) return { action: "hard-delete" }
+  return {
+    action: "hide",
+    data: isSender ? { deletedBySenderAt: now } : { deletedByReceiverAt: now },
+  }
+}
+
+/** Filtre Prisma : messages visibles par l'utilisateur (envoyés ou reçus, non supprimés par lui). */
+export function visibleMessagesWhere(userId: string) {
+  return {
+    OR: [
+      { senderId: userId, deletedBySenderAt: null },
+      { receiverId: userId, deletedByReceiverAt: null },
+    ],
+  }
+}
+
 /** L'interlocuteur dans un échange, du point de vue de l'utilisateur courant. */
 export function otherParticipant<T extends { id: string }>(
   userId: string,

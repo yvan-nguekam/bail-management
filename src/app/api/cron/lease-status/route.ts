@@ -18,9 +18,18 @@ function hasValidCronSecret(request: NextRequest) {
   return received.length === expected.length && timingSafeEqual(received, expected);
 }
 
-// Scheduler (Authorization: Bearer CRON_SECRET) or an ADMIN triggering it manually
+// Same-origin check for the manual (session-based) trigger
+function isSameOrigin(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  return origin !== null && origin === request.nextUrl.origin;
+}
+
+// Scheduler: Authorization: Bearer CRON_SECRET (GET or POST).
+// ADMIN session: POST from the app itself only, so that a link or a cross-site
+// page can never make an admin's browser run the jobs (CSRF).
 async function isAuthorized(request: NextRequest) {
   if (hasValidCronSecret(request)) return true;
+  if (request.method !== "POST" || !isSameOrigin(request)) return false;
   const session = await getServerSession(authOptions);
   return session?.user?.role === "ADMIN";
 }

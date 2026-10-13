@@ -1,8 +1,17 @@
-import { NextResponse } from "next/server"
+import { NextResponse, after } from "next/server"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
 import { enforceRateLimit } from "@/lib/api-rate-limit"
+import { sendLinkEmail } from "@/lib/link-email"
+import { AccountExistsEmail } from "@/emails/account-exists"
+
+// Même réponse que l'adresse soit libre ou déjà prise : l'inscription ne doit pas
+// permettre de savoir qui a un compte. Le titulaire existant est prévenu par e-mail.
+const NEUTRAL_RESPONSE = {
+  message:
+    "Inscription enregistrée. Connectez-vous avec vos identifiants. Si cette adresse avait déjà un compte, un e-mail vous a été envoyé.",
+}
 
 // ADMIN ne peut jamais être choisi à l'inscription publique
 const registerSchema = z.object({
@@ -29,20 +38,27 @@ export async function POST(request: Request) {
 
     const { email, password, name, role, phone } = parsed.data
 
-    // Check if user already exists
+    // Hachage dans tous les cas : le temps de réponse ne trahit pas un compte existant
+    const hashedPassword = await bcrypt.hash(password, 12)
+
     const existingUser = await prisma.user.findUnique({
-      where: { email }
+      where: { email },
+      select: { name: true, email: true },
     })
 
     if (existingUser) {
-      return NextResponse.json(
-        { error: "User already exists" },
-        { status: 400 }
+      // Après la réponse, pour ne pas allonger ce cas par rapport à une vraie création
+      after(() =>
+        sendLinkEmail({
+          to: existingUser.email,
+          subject: "Une inscription a été tentée avec votre adresse",
+          react: AccountExistsEmail({ name: existingUser.name }),
+          link: "/auth/forgot-password",
+          label: "account-exists",
+        })
       )
+      return NextResponse.json(NEUTRAL_RESPONSE, { status: 201 })
     }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12)
 
     // Create user
     const user = await prisma.user.create({
@@ -74,17 +90,11 @@ export async function POST(request: Request) {
       }
     })
 
-    return NextResponse.json(
-      {
-        message: "User created successfully",
-        user
-      },
-      { status: 201 }
-    )
+    return NextResponse.json(NEUTRAL_RESPONSE, { status: 201 })
   } catch (error) {
     console.error("Registration error:", error)
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Erreur serveur" },
       { status: 500 }
     )
   }

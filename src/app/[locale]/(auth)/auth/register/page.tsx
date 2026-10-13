@@ -62,7 +62,8 @@ export default function RegisterPage() {
         return
       }
 
-      toast.success("Compte créé avec succès !")
+      // Message volontairement neutre (ne révèle pas si l'adresse avait déjà un compte)
+      toast.success(data.message || "Inscription enregistrée. Connectez-vous.", { duration: 8000 })
       router.push("/auth/login")
     } catch {
       toast.error("Une erreur est survenue")

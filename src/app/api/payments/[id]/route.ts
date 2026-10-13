@@ -7,6 +7,9 @@ import { notify } from "@/lib/notify";
 import { formatCurrency } from "@/lib/utils";
 import { absoluteUrl, buildEmailSubject } from "@/lib/notification-preferences";
 import { PaymentReceivedEmail } from "@/emails/payment-received";
+import { Prisma } from "@prisma/client";
+import { toUtcDay } from "@/lib/payment-schedule";
+import { checkPaymentUpdate, reopenedPaymentStatus } from "@/lib/status-rules";
 
 // Schema de validation pour mise à jour
 const updatePaymentSchema = z.object({
@@ -147,13 +150,38 @@ export async function PUT(
     const body = await request.json();
     const validatedData = updatePaymentSchema.parse(body);
 
-    // Convertir les dates si présentes
-    const updateData: any = { ...validatedData };
-    if (validatedData.dueDate) {
-      updateData.dueDate = new Date(validatedData.dueDate);
+    // Paiement encaissé ou annulé : seules quelques corrections restent possibles
+    const changedFields = Object.keys(validatedData).filter(
+      (key) => validatedData[key as keyof typeof validatedData] !== undefined
+    );
+    const rule = checkPaymentUpdate(existingPayment.status, {
+      status: validatedData.status,
+      fields: changedFields,
+    });
+    if (!rule.ok) {
+      return NextResponse.json({ error: rule.error }, { status: 400 });
     }
-    if (validatedData.paidDate) {
-      updateData.paidDate = new Date(validatedData.paidDate);
+
+    const { transactionId, dueDate, paidDate, ...rest } = validatedData;
+    const updateData: Prisma.PaymentUncheckedUpdateInput = {
+      ...rest,
+      ...(transactionId !== undefined && { reference: transactionId }),
+      ...(dueDate && { dueDate: new Date(dueDate) }),
+      ...(paidDate !== undefined && { paidDate: paidDate ? new Date(paidDate) : null }),
+    };
+
+    // Un paiement réouvert reprend le statut dicté par son échéance
+    if (
+      existingPayment.status === "CANCELLED" &&
+      validatedData.status &&
+      validatedData.status !== "CANCELLED"
+    ) {
+      updateData.status = reopenedPaymentStatus(existingPayment.dueDate, toUtcDay(new Date()));
+    }
+
+    // Encaissement sans date fournie : aujourd'hui
+    if (validatedData.status === "PAID" && existingPayment.status !== "PAID" && !paidDate) {
+      updateData.paidDate = new Date();
     }
 
     const payment = await prisma.payment.update({
