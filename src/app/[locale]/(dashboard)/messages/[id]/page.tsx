@@ -179,8 +179,8 @@ export default function MessageDetailPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Supprimer ce message ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Cette action est irréversible. Le message sera supprimé pour les deux
-              correspondants.
+              Le message disparaîtra de votre boîte. Votre correspondant le conserve
+              tant qu&apos;il ne l&apos;a pas supprimé lui-même.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

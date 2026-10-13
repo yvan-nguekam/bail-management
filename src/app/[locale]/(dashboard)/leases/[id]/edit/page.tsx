@@ -33,6 +33,7 @@ import {
 import { PageHeader } from "@/components/shared/page-header";
 import { PageSkeleton } from "@/components/shared/page-skeleton";
 import { statusLabel } from "@/components/shared/status-badge";
+import { allowedLeaseStatusTargets, FROZEN_LEASE_STATUSES, type LeaseStatus } from "@/lib/status-rules";
 import { FormActions } from "@/components/properties/form-actions";
 import { toast } from "sonner";
 
@@ -52,7 +53,6 @@ const leaseSchema = z.object({
 
 type LeaseFormData = z.infer<typeof leaseSchema>;
 
-const leaseStatuses = ["DRAFT", "ACTIVE", "EXPIRED", "TERMINATED", "RENEWED"] as const;
 
 export default function EditLeasePage() {
   const params = useParams<{ id: string }>();
@@ -61,6 +61,11 @@ export default function EditLeasePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [propertyName, setPropertyName] = useState("");
   const [tenantName, setTenantName] = useState("");
+  // Statuts proposés : ceux autorisés depuis le statut actuel (résiliation et
+  // renouvellement passent par leurs actions dédiées sur la fiche du bail)
+  const [statusOptions, setStatusOptions] = useState<LeaseStatus[]>([]);
+  // Bail terminé : dates et loyer figés (l'API les refuse aussi)
+  const [frozen, setFrozen] = useState(false);
 
   const form = useForm<z.input<typeof leaseSchema>, unknown, LeaseFormData>({
     resolver: zodResolver(leaseSchema),
@@ -81,6 +86,8 @@ export default function EditLeasePage() {
 
       const lease = await response.json();
       setPropertyName(lease.property.name);
+      setStatusOptions(allowedLeaseStatusTargets(lease.status));
+      setFrozen(FROZEN_LEASE_STATUSES.includes(lease.status));
       setTenantName(lease.tenant.name);
 
       // Formater les dates pour l'input date
@@ -168,7 +175,7 @@ export default function EditLeasePage() {
                     <FormItem>
                       <FormLabel>Date de début</FormLabel>
                       <FormControl>
-                        <Input type="date" {...field} />
+                        <Input type="date" {...field} disabled={frozen} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -182,7 +189,7 @@ export default function EditLeasePage() {
                     <FormItem>
                       <FormLabel>Date de fin</FormLabel>
                       <FormControl>
-                        <Input type="date" {...field} />
+                        <Input type="date" {...field} disabled={frozen} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -205,7 +212,7 @@ export default function EditLeasePage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {leaseStatuses.map((value) => (
+                          {statusOptions.map((value) => (
                             <SelectItem key={value} value={value}>
                               {statusLabel("lease", value)}
                             </SelectItem>
@@ -225,8 +232,9 @@ export default function EditLeasePage() {
             <CardHeader>
               <CardTitle>Informations financières</CardTitle>
               <CardDescription>
-                Modifier les dates, le loyer ou le jour de paiement recalcule les échéances non
-                payées. Les échéances déjà payées ou annulées ne sont pas modifiées.
+                {frozen
+                  ? "Ce bail est terminé : ses dates et son loyer sont conservés tels quels. Pour reconduire la location, utilisez « Renouveler » sur la fiche du bail."
+                  : "Modifier les dates, le loyer ou le jour de paiement recalcule les échéances non payées. Les échéances déjà payées ou annulées ne sont pas modifiées."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -238,7 +246,7 @@ export default function EditLeasePage() {
                     <FormItem>
                       <FormLabel>Loyer mensuel (FCFA)</FormLabel>
                       <FormControl>
-                        <Input type="number" min="0" {...field} value={field.value as number} />
+                        <Input type="number" min="0" {...field} value={field.value as number} disabled={frozen} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -266,7 +274,7 @@ export default function EditLeasePage() {
                     <FormItem>
                       <FormLabel>Jour de paiement</FormLabel>
                       <FormControl>
-                        <Input type="number" min="1" max="31" {...field} value={field.value as number} />
+                        <Input type="number" min="1" max="31" {...field} value={field.value as number} disabled={frozen} />
                       </FormControl>
                       <FormDescription>Jour du mois où le loyer est dû</FormDescription>
                       <FormMessage />

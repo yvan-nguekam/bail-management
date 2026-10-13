@@ -7,6 +7,7 @@ import { notify } from "@/lib/notify";
 import { absoluteUrl, buildEmailSubject } from "@/lib/notification-preferences";
 import { NewMessageEmail } from "@/emails/new-message";
 import { canMessageUser } from "@/lib/message-contacts";
+import { visibleMessagesWhere } from "@/lib/messages";
 
 const messageSchema = z.object({
   receiverId: z.string().min(1, "Le destinataire est requis"),
@@ -24,12 +25,7 @@ export async function GET() {
     }
 
     const messages = await prisma.message.findMany({
-      where: {
-        OR: [
-          { senderId: session.user.id },
-          { receiverId: session.user.id },
-        ],
-      },
+      where: visibleMessagesWhere(session.user.id),
       include: {
         sender: {
           select: { id: true, name: true, email: true, role: true },
@@ -64,16 +60,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = messageSchema.parse(body);
 
-    const receiver = await prisma.user.findUnique({
-      where: { id: validatedData.receiverId },
-      select: { id: true },
-    });
-
-    if (!receiver) {
-      return NextResponse.json({ error: "Destinataire non trouvé" }, { status: 404 });
-    }
-
-    // Le destinataire doit faire partie des contacts autorisés (jamais soi-même)
+    // Destinataire inexistant ou hors périmètre : même réponse, pour ne pas
+    // révéler quels identifiants existent. Jamais soi-même.
     if (!(await canMessageUser(session.user, validatedData.receiverId))) {
       return NextResponse.json(
         { error: "Vous ne pouvez pas écrire à cet utilisateur" },

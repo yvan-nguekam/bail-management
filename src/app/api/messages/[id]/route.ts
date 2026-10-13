@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isMessageParticipant } from "@/lib/messages";
+import { deletionFor, isDeletedFor, isMessageParticipant } from "@/lib/messages";
 
 const participantSelect = { id: true, name: true, email: true, role: true } as const;
 
@@ -28,8 +28,12 @@ export async function GET(
       },
     });
 
-    if (!message || !isMessageParticipant(session.user.id, message)) {
-      // 404 dans les deux cas pour ne pas révéler l'existence du message
+    if (
+      !message ||
+      !isMessageParticipant(session.user.id, message) ||
+      isDeletedFor(session.user.id, message)
+    ) {
+      // 404 dans tous les cas pour ne pas révéler l'existence du message
       return NextResponse.json({ error: "Message non trouvé" }, { status: 404 });
     }
 
@@ -64,14 +68,31 @@ export async function DELETE(
 
     const message = await prisma.message.findUnique({
       where: { id },
-      select: { id: true, senderId: true, receiverId: true, subject: true },
+      select: {
+        id: true,
+        senderId: true,
+        receiverId: true,
+        subject: true,
+        deletedBySenderAt: true,
+        deletedByReceiverAt: true,
+      },
     });
 
-    if (!message || !isMessageParticipant(session.user.id, message)) {
+    if (
+      !message ||
+      !isMessageParticipant(session.user.id, message) ||
+      isDeletedFor(session.user.id, message)
+    ) {
       return NextResponse.json({ error: "Message non trouvé" }, { status: 404 });
     }
 
-    await prisma.message.delete({ where: { id } });
+    // Masqué pour l'utilisateur seulement ; effacé quand les deux l'ont supprimé
+    const deletion = deletionFor(session.user.id, message, new Date());
+    if (deletion.action === "hard-delete") {
+      await prisma.message.delete({ where: { id } });
+    } else {
+      await prisma.message.update({ where: { id }, data: deletion.data });
+    }
 
     await prisma.activity.create({
       data: {

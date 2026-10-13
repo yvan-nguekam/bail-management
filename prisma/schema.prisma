@@ -343,6 +343,10 @@ model Message {
   read   Boolean   @default(false)
   readAt DateTime?
 
+  // Suppression propre à chaque participant ; le message disparaît quand les deux l'ont supprimé
+  deletedBySenderAt   DateTime?
+  deletedByReceiverAt DateTime?
+
   createdAt DateTime @default(now())
 
   @@map("messages")

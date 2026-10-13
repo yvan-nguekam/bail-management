@@ -26,6 +26,7 @@ import {
   Mail,
   Phone,
   ChevronRight,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -118,6 +119,7 @@ export default function PaymentDetailsPage() {
   const [markPaidDialogOpen, setMarkPaidDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isMarkingPaid, setIsMarkingPaid] = useState(false);
+  const [isReopening, setIsReopening] = useState(false);
 
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [transactionId, setTransactionId] = useState("");
@@ -205,6 +207,33 @@ export default function PaymentDetailsPage() {
     }
   };
 
+  // Un paiement annulé est rouvert (en attente ou en retard selon son échéance)
+  const handleReopen = async () => {
+    setIsReopening(true);
+    try {
+      const response = await fetch(`/api/payments/${params.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "PENDING" }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Erreur lors de la réouverture");
+      }
+
+      toast.success("Paiement rouvert");
+      fetchPayment();
+    } catch (error) {
+      console.error("Erreur:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Erreur lors de la réouverture"
+      );
+    } finally {
+      setIsReopening(false);
+    }
+  };
+
   if (loading) {
     return <PaymentDetailsSkeleton />;
   }
@@ -214,8 +243,9 @@ export default function PaymentDetailsPage() {
   }
 
   const daysOverdue = getDaysOverdue(payment.dueDate);
-  const isOverdue = payment.status !== "PAID" && daysOverdue > 0;
   const isPaid = payment.status === "PAID";
+  const isCancelled = payment.status === "CANCELLED";
+  const isOverdue = !isPaid && !isCancelled && daysOverdue > 0;
   const method = paymentMethodLabel(payment.paymentMethod);
 
   return (
@@ -226,7 +256,17 @@ export default function PaymentDetailsPage() {
         backHref="/payments"
         actions={
           <>
-            {!isPaid && (
+            {isCancelled && (
+              <Button variant="outline" onClick={handleReopen} disabled={isReopening}>
+                {isReopening ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  <RotateCcw className="h-4 w-4" aria-hidden />
+                )}
+                Rouvrir le paiement
+              </Button>
+            )}
+            {!isPaid && !isCancelled && (
               <Button onClick={() => setMarkPaidDialogOpen(true)}>
                 <CheckCircle2 className="h-4 w-4" aria-hidden />
                 Marquer comme payé
@@ -238,14 +278,17 @@ export default function PaymentDetailsPage() {
                 Télécharger le reçu
               </Button>
             )}
-            <Button
-              variant="outline"
-              className="text-destructive hover:text-destructive"
-              onClick={() => setDeleteDialogOpen(true)}
-            >
-              <Trash2 className="h-4 w-4" aria-hidden />
-              Supprimer
-            </Button>
+            {/* Un paiement encaissé fait partie de l'historique : non supprimable */}
+            {!isPaid && (
+              <Button
+                variant="outline"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden />
+                Supprimer
+              </Button>
+            )}
           </>
         }
       >

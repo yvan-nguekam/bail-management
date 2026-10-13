@@ -381,7 +381,8 @@ La route `/api/cron/lease-status` met à jour les statuts selon le calendrier :
 
 Elle doit être appelée **une fois par jour** avec l'en-tête `Authorization: Bearer <CRON_SECRET>`
 (GET ou POST), par exemple via Vercel Cron, Supabase Cron ou cron-job.org. Un administrateur
-connecté peut aussi la déclencher. Les traitements peuvent être relancés sans créer de doublons.
+connecté peut aussi la déclencher, uniquement par une requête POST émise depuis l'application
+(protection CSRF). Les traitements peuvent être relancés sans créer de doublons.
 
 En local, avec l'application lancée (`pnpm dev`) et `CRON_SECRET` dans `.env` :
 ```bash
